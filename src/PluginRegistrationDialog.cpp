@@ -10,17 +10,13 @@
 #include "PluginRegistrationDialog.h"
 
 #include "EffectInterface.h"
-#include "IncompatiblePluginsDialog.h"
 #include "ModuleManager.h"
 #include "PluginManager.h"
-#include "PluginStartupRegistration.h"
 #include "ShuttleGui.h"
 #include "widgets/AudacityMessageBox.h"
 #include "widgets/ProgressDialog.h"
 
-#include <set>
 #include <wx/setup.h> // for wxUSE_* macros
-#include <wx/app.h>
 #include <wx/defs.h>
 #include <wx/dir.h>
 #include <wx/dynlib.h>
@@ -29,8 +25,6 @@
 #include <wx/radiobut.h>
 #include <wx/wfstream.h>
 #include <wx/utils.h>
-
-#define DISABLE_STATE_NEW
 
 // ============================================================================
 //
@@ -345,9 +339,7 @@ enum
 {
    STATE_Enabled,
    STATE_Disabled,
-#ifndef DISABLE_STATE_NEW
    STATE_New,
-#endif
 
    STATE_COUNT
 };
@@ -357,13 +349,10 @@ enum
    ID_ShowAll = 10000,
    ID_ShowEnabled,
    ID_ShowDisabled,
-#ifndef DISABLE_STATE_NEW
    ID_ShowNew,
-#endif
    ID_List,
    ID_ClearAll,
    ID_SelectAll,
-   ID_Rescan,
    ID_Enable,
    ID_Disable,
 };
@@ -381,7 +370,6 @@ BEGIN_EVENT_TABLE(PluginRegistrationDialog, wxDialogWrapper)
    EVT_LIST_COL_CLICK(ID_List, PluginRegistrationDialog::OnSort)
    EVT_BUTTON(wxID_OK, PluginRegistrationDialog::OnOK)
    EVT_BUTTON(wxID_CANCEL, PluginRegistrationDialog::OnCancel)
-   EVT_BUTTON(ID_Rescan, PluginRegistrationDialog::OnRescan)
    EVT_BUTTON(ID_ClearAll, PluginRegistrationDialog::OnClearAll)
    EVT_BUTTON(ID_SelectAll, PluginRegistrationDialog::OnSelectAll)
    EVT_BUTTON(ID_Enable, PluginRegistrationDialog::OnEnable)
@@ -389,27 +377,24 @@ BEGIN_EVENT_TABLE(PluginRegistrationDialog, wxDialogWrapper)
    EVT_RADIOBUTTON(ID_ShowAll, PluginRegistrationDialog::OnChangedVisibility)
    EVT_RADIOBUTTON(ID_ShowEnabled, PluginRegistrationDialog::OnChangedVisibility)
    EVT_RADIOBUTTON(ID_ShowDisabled, PluginRegistrationDialog::OnChangedVisibility)
-#ifndef DISABLE_STATE_NEW
    EVT_RADIOBUTTON(ID_ShowNew, PluginRegistrationDialog::OnChangedVisibility)
-#endif
 END_EVENT_TABLE()
 
-PluginRegistrationDialog::PluginRegistrationDialog(wxWindow *parent)
+PluginRegistrationDialog::PluginRegistrationDialog(wxWindow *parent, EffectType type)
 :  wxDialogWrapper(parent,
             wxID_ANY,
-            XO("Manage Plugins"),
+            XO("Manage Plug-ins"),
             wxDefaultPosition, wxDefaultSize,
             wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
 {
+   mType = type;
    mEffects = NULL;
    SetName();
 
    mStates.resize(STATE_COUNT);
    mStates[STATE_Enabled] = _("Enabled");
    mStates[STATE_Disabled] = _("Disabled");
-#ifndef DISABLE_STATE_NEW
    mStates[STATE_New] = _("New");
-#endif
 
    mSortColumn = COL_Name;
    mSortDirection = 1;
@@ -487,7 +472,6 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
                rb->SetAccessible(safenew WindowAccessible(rb));
 #endif
 
-#ifndef DISABLE_STATE_NEW
                rb = S.Id(ID_ShowNew)
                   /* i18n-hint: Radio button to show just the newly discovered effects */
                   .Name(XO("Show new"))
@@ -496,7 +480,6 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
 #if wxUSE_ACCESSIBILITY
                // so that name can be set on a standard control
                rb->SetAccessible(safenew WindowAccessible(rb));
-#endif
 #endif
             }
             S.EndHorizontalLay();
@@ -516,7 +499,6 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
          {
             S.Id(ID_SelectAll).AddButton(XXO("&Select All"));
             S.Id(ID_ClearAll).AddButton(XXO("C&lear All"));
-            S.Id(ID_Rescan).AddButton(XXO("Rescan"));
 
             S.StartHorizontalLay(wxALIGN_CENTER);
             {
@@ -550,20 +532,43 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
    }
 
    PluginManager & pm = PluginManager::Get();
-   PopulateItemsList(pm);
+   for (auto &plug : pm.AllPlugins()) {
+      PluginType plugType = plug.GetPluginType();
+      if (plugType != PluginTypeEffect && plugType != PluginTypeStub)
+         continue;
 
-   for (const auto& item : mItems)
-   {
-      const auto& itemData = item.second;
+      const auto &path = plug.GetPath();
+      ItemData & item = mItems[path];  // will create NEW entry
+      item.plugs.push_back(&plug);
+      item.path = path;
+      item.state = plug.IsEnabled() ? STATE_Enabled : STATE_Disabled;
+      item.valid = plug.IsValid();
+
+      if (plugType == PluginTypeEffect)
+      {
+         item.name = plug.GetSymbol().Translation();
+      }
+      // This is not right and will not work when other plugin types are added.
+      // But it's presumed that the plugin manager dialog will be fully developed
+      // by then.
+      else if (plugType == PluginTypeStub)
+      {
+         wxFileName fname { path };
+         item.name = fname.GetName().Trim(false).Trim(true);
+         if (!item.valid)
+         {
+            item.state = STATE_New;
+         }
+      }
 
       int x;
-      mEffects->GetTextExtent(itemData.name, &x, NULL);
+      mEffects->GetTextExtent(item.name, &x, NULL);
       colWidths[COL_Name] = wxMax(colWidths[COL_Name], x);
 
-      mEffects->GetTextExtent(itemData.path, &x, NULL);
+      mEffects->GetTextExtent(item.path, &x, NULL);
       if (x > colWidths[COL_Path])
       {
-         mLongestPath = itemData.path;
+         mLongestPath = item.path;
       }
       colWidths[COL_Path] = wxMax(colWidths[COL_Path], x);
    }
@@ -608,42 +613,6 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
 
 }
 
-void PluginRegistrationDialog::PopulateItemsList(PluginManager& pm)
-{
-   for (auto& plug : pm.AllPlugins())
-   {
-      PluginType plugType = plug.GetPluginType();
-      if (plugType != PluginTypeEffect && plugType != PluginTypeStub)
-         continue;
-
-      const auto& path = plug.GetPath();
-      ItemData& item = mItems[path];  // will create NEW entry
-      item.plugs.push_back(&plug);
-      item.path = path;
-      item.state = plug.IsEnabled() ? STATE_Enabled : STATE_Disabled;
-      item.valid = plug.IsValid();
-
-      if (plugType == PluginTypeEffect)
-      {
-         item.name = plug.GetSymbol().Translation();
-      }
-      // This is not right and will not work when other plugin types are added.
-      // But it's presumed that the plugin manager dialog will be fully developed
-      // by then.
-      else if (plugType == PluginTypeStub)
-      {
-         wxFileName fname{ path };
-         item.name = fname.GetName().Trim(false).Trim(true);
-#ifndef DISABLE_STATE_NEW
-         if (!item.valid)
-         {
-            item.state = STATE_New;
-         }
-#endif
-      }
-   }
-}
-
 void PluginRegistrationDialog::RegenerateEffectsList(int filter)
 {
    mFilter = filter;
@@ -661,14 +630,12 @@ void PluginRegistrationDialog::RegenerateEffectsList(int filter)
       case ID_ShowAll:
          add = true;
          break;
-#ifndef DISABLE_STATE_NEW
       case ID_ShowNew:
          if (item.state == STATE_New)
          {
             add = true;
          }
          break;
-#endif
       case ID_ShowEnabled:
          if (item.state == STATE_Enabled)
          {
@@ -718,14 +685,12 @@ void PluginRegistrationDialog::SetState(int i, bool toggle, bool state)
 
    ItemData *item = (ItemData *) li.m_data;
 
-#ifndef DISABLE_STATE_NEW
    // If changing the state of a "New" (stub) entry, then we mark it as valid
    // since it will either be registered if "Enabled" or ignored if "Disabled".
    if (item->state == STATE_New)
    {
       item->valid = true;
    }
-#endif
 
    if (toggle)
    {
@@ -736,14 +701,11 @@ void PluginRegistrationDialog::SetState(int i, bool toggle, bool state)
       item->state = state;
    }
    
-#ifndef DISABLE_STATE_NEW
    if (mFilter == ID_ShowNew && item->state != STATE_New)
    {
       mEffects->DeleteItem(i);
    }
-   else//if
-#endif
-   if (mFilter == ID_ShowDisabled && item->state != STATE_Disabled)
+   else if (mFilter == ID_ShowDisabled && item->state != STATE_Disabled)
    {
       mEffects->DeleteItem(i);
    }
@@ -869,65 +831,6 @@ void PluginRegistrationDialog::OnClearAll(wxCommandEvent & WXUNUSED(evt))
    }
 }
 
-void PluginRegistrationDialog::OnRescan(wxCommandEvent& WXUNUSED(evt))
-{
-   mItems.clear();
-   mEffects->DeleteAllItems();
-   mEffects->Update();
-
-   wxTheApp->CallAfter([this] {
-      std::set<PluginPath> disabledPlugins;
-      std::vector<wxString> failedPlugins;
-
-      auto& pm = PluginManager::Get();
-
-      // Record list of plugins that are currently disabled
-      for (auto& plug : pm.AllPlugins())
-      {
-         PluginType plugType = plug.GetPluginType();
-         if (plugType != PluginTypeEffect && plugType != PluginTypeStub)
-            continue;
-
-         if (!plug.IsEnabled())
-            disabledPlugins.insert(plug.GetPath());
-      }
-
-      pm.ClearEffectPlugins();
-
-      auto newPlugins = PluginManager::Get().CheckPluginUpdates();
-      if (!newPlugins.empty())
-      {
-         PluginStartupRegistration reg(newPlugins);
-         reg.Run();
-
-         failedPlugins = reg.GetFailedPluginsPaths();
-      }
-
-      // Disable all plugins which were previously disabled
-      for (auto& plug : pm.AllPlugins())
-      {
-         PluginType plugType = plug.GetPluginType();
-         if (plugType != PluginTypeEffect && plugType != PluginTypeStub)
-            continue;
-
-         const auto& path = plug.GetPath();
-         if (disabledPlugins.find(path) != disabledPlugins.end())
-            plug.SetEnabled(false);
-      }
-
-      pm.Save();
-
-      if (!failedPlugins.empty())
-      {
-         auto dialog = safenew IncompatiblePluginsDialog(this, wxID_ANY, ScanType::Manual, failedPlugins);
-         dialog->ShowModal();
-      }
-
-      PopulateItemsList(pm);
-      RegenerateEffectsList(mFilter);
-   });
-}
-
 void PluginRegistrationDialog::OnEnable(wxCommandEvent & WXUNUSED(evt))
 {
    std::vector<long> items;
@@ -1043,13 +946,11 @@ void PluginRegistrationDialog::OnOK(wxCommandEvent & WXUNUSED(evt))
                   XO("Effect or Command at %s failed to register:\n%s")
                      .Format( path, errMsgs ) );
          }
-#ifndef DISABLE_STATE_NEW
          else if (item.state == STATE_New) {
             for (auto plug : item.plugs)
                plug->SetValid(false);
          }
-#endif
-         else {
+         else if (item.state != STATE_New) {
             for (auto plug : item.plugs) {
                plug->SetEnabled(item.state == STATE_Enabled);
                plug->SetValid(item.valid);

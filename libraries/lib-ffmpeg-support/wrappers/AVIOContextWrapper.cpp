@@ -84,11 +84,9 @@ AVIOContextWrapper::Open(const wxString& fileName, bool forWriting)
 int AVIOContextWrapper::FileRead(void* opaque, uint8_t* buf, int size)
 {
    AVIOContextWrapper* wrapper = static_cast<AVIOContextWrapper*>(opaque);
-   
-   if (wrapper == nullptr)
-      return AUDACITY_AVERROR(EINVAL);
-   
-   return wrapper->Read(buf, size);
+   if (!(wrapper && wrapper->mpFile))
+      return {};
+   return wrapper->mpFile->Read(buf, size);
 }
 
 int AVIOContextWrapper::FileWrite(void* opaque, const uint8_t* buf, int size)

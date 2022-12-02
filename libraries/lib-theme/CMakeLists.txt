@@ -9,8 +9,16 @@ set( SOURCES
    AColorResources.h
    AllThemeResources.cpp
    AllThemeResources.h
+   ClassicThemeAsCeeCode.cpp
+   ClassicThemeAsCeeCode.h
+   DarkThemeAsCeeCode.cpp
+   DarkThemeAsCeeCode.h
+   HiContrastThemeAsCeeCode.cpp
+   HiContrastThemeAsCeeCode.h
    ImageManipulation.cpp
    ImageManipulation.h
+   LightThemeAsCeeCode.cpp
+   LightThemeAsCeeCode.h
    MacroMagic.h
    Theme.cpp
    Theme.h

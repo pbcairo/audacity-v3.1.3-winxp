@@ -12,11 +12,7 @@
 class AudacityProject;
 class AudacityApp;
 class CommandContext;
-
-// Forward-declaring this type before including wx/event.h causes strange
-// compilation failures with MSVC.
-// class wxEvtHandler;
-#include <wx/event.h>
+class wxEvtHandler;
 
 // Base class for objects, to whose member functions, the CommandManager will
 // dispatch.

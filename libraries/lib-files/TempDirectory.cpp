@@ -13,30 +13,6 @@
 #include "FileNames.h"
 #include "BasicUI.h"
 
-
-namespace
-{
-struct TempDirChangedPublisher final : Observer::Publisher<FilePath>
-{
-   void UpdateTempPath(const FilePath& path)
-   {
-      if (prevPath != path)
-      {
-         Publish(path);
-         prevPath = path;
-      }
-   }
-
-   FilePath prevPath;
-};
-
-TempDirChangedPublisher& GetTempDirChangedPublisher()
-{
-   static TempDirChangedPublisher publisher;
-   return publisher;
-}
-}
-
 static wxString &TempDirPath()
 {
    static wxString path;
@@ -87,7 +63,6 @@ const FilePath &TempDirectory::DefaultTempDir()
 void TempDirectory::SetDefaultTempDir( const FilePath &tempDir )
 {
    sDefaultTempDir = tempDir;
-   GetTempDirChangedPublisher().UpdateTempPath(tempDir);
 }
 
 // We now disallow temp directory name that puts it where cleaner apps will
@@ -152,9 +127,4 @@ bool TempDirectory::FATFilesystemDenied( const FilePath &path,
    }
 
    return false;
-}
-
-Observer::Publisher<FilePath>& TempDirectory::GetTempPathObserver()
-{
-   return GetTempDirChangedPublisher();
 }

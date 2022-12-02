@@ -65,13 +65,13 @@ struct PrefsItemVisitor final : Registry::Visitor {
 };
 }
 
-PluginPath PrefsPanel::GetPath() const
+PluginPath PrefsPanel::GetPath()
 { return BUILTIN_PREFS_PANEL_PREFIX + GetSymbol().Internal(); }
 
-VendorSymbol PrefsPanel::GetVendor() const
+VendorSymbol PrefsPanel::GetVendor()
 {  return XO("Audacity");}
 
-wxString PrefsPanel::GetVersion() const
+wxString PrefsPanel::GetVersion()
 {     return AUDACITY_VERSION_STRING;}
 
 PrefsPanel::Registration::Registration( const wxString &name,

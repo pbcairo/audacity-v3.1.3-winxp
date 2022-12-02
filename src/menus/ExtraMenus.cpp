@@ -5,7 +5,7 @@
 #include "ProjectWindows.h"
 #include "../commands/CommandContext.h"
 #include "../commands/CommandManager.h"
-#include "../toolbars/MeterToolBar.h"
+#include "../toolbars/MixerToolBar.h"
 #include "../toolbars/DeviceToolBar.h"
 
 #include <wx/frame.h>
@@ -27,43 +27,61 @@ struct Handler : CommandHandlerObject {
 void OnOutputGain(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, true );
-   tb.ShowOutputGainDialog();
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->ShowOutputGainDialog();
+   }
 }
 
 void OnOutputGainInc(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, true );
-   tb.AdjustOutputGain(1);
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->AdjustOutputGain(1);
+   }
 }
 
 void OnOutputGainDec(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, true );
-   tb.AdjustOutputGain(-1);
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->AdjustOutputGain(-1);
+   }
 }
 
 void OnInputGain(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, false );
-   tb.ShowInputGainDialog();
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->ShowInputGainDialog();
+   }
 }
 
 void OnInputGainInc(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, false );
-   tb.AdjustInputGain(1);
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->AdjustInputGain(1);
+   }
 }
 
 void OnInputGainDec(const CommandContext &context)
 {
    auto &project = context.project;
-   auto &tb = MeterToolBar::Get( project, false );
-   tb.AdjustInputGain(-1);
+   auto tb = &MixerToolBar::Get( project );
+
+   if (tb) {
+      tb->AdjustInputGain(-1);
+   }
 }
 
 void OnInputDevice(const CommandContext &context)

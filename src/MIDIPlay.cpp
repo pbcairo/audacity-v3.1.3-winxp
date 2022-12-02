@@ -397,25 +397,25 @@ static PaTime util_GetTime( void )
 
 #elif defined( __WXMSW__ )
 
-#include "profileapi.h"
-#include "sysinfoapi.h"
-#include "timeapi.h"
+// #include "profileapi.h"
+// #include "sysinfoapi.h"
+// #include "timeapi.h"
 
 static int usePerformanceCounter_;
 static double secondsPerTick_;
 
 static struct InitializeTime { InitializeTime() {
     LARGE_INTEGER ticksPerSecond;
-
+	/*
     if( QueryPerformanceFrequency( &ticksPerSecond ) != 0 )
     {
         usePerformanceCounter_ = 1;
         secondsPerTick_ = 1.0 / (double)ticksPerSecond.QuadPart;
     }
     else
-    {
+    {*/
         usePerformanceCounter_ = 0;
-    }
+    //}
 } } initializeTime;
 
 static double util_GetTime( void )
@@ -443,9 +443,9 @@ static double util_GetTime( void )
     else
     {
 	#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
-        return GetTickCount64() * .001;
+		return GetTickCount();
 	#else
-        return timeGetTime() * .001;
+		return GetTickCount();
 	#endif
     }
 }
@@ -490,11 +490,7 @@ static double SystemTime(bool usingAlsa)
    if (usingAlsa) {
       struct timespec now;
       // CLOCK_MONOTONIC_RAW is unaffected by NTP or adj-time
-#ifdef FreeBSD
-      clock_gettime(CLOCK_REALTIME, &now);
-#else
       clock_gettime(CLOCK_MONOTONIC_RAW, &now);
-#endif
       //return now.tv_sec + now.tv_nsec * 0.000000001;
       return (now.tv_sec + now.tv_nsec * 0.000000001) - streamStartTime;
    }
@@ -615,65 +611,36 @@ PmTimestamp MidiTime(void *pInfo)
 // Sends MIDI control changes up to the starting point mT0
 // if send is true. Output is delayed by offset to facilitate
 // looping (each iteration is delayed more).
-void MIDIPlay::PrepareMidiIterator(bool send, double startTime, double offset)
+void MIDIPlay::PrepareMidiIterator(bool send, double offset)
 {
-   mIterator.emplace(mPlaybackSchedule, *this,
-      mMidiPlaybackTracks, startTime, offset, send);
-}
-
-Iterator::Iterator(
-   const PlaybackSchedule &schedule, MIDIPlay &midiPlay,
-   NoteTrackConstArray &midiPlaybackTracks,
-   double startTime, double offset, bool send )
-   : mPlaybackSchedule{ schedule }
-   , mMIDIPlay{ midiPlay }
-{
+   int i;
+   int nTracks = mMidiPlaybackTracks.size();
    // instead of initializing with an Alg_seq, we use begin_seq()
    // below to add ALL Alg_seq's.
+   mIterator.emplace(nullptr, false);
    // Iterator not yet initialized, must add each track...
-   for (auto &t : midiPlaybackTracks) {
+   for (i = 0; i < nTracks; i++) {
+      const auto t = mMidiPlaybackTracks[i].get();
       Alg_seq_ptr seq = &t->GetSeq();
       // mark sequence tracks as "in use" since we're handing this
       // off to another thread and want to make sure nothing happens
       // to the data until playback finishes. This is just a sanity check.
       seq->set_in_use(true);
-      const void *cookie = t.get();
-      it.begin_seq(seq,
-         // casting away const, but allegro just uses the pointer opaquely
-         const_cast<void*>(cookie), t->GetOffset() + offset);
+      mIterator->begin_seq(seq,
+         // casting away const, but allegro just uses the pointer as an opaque "cookie"
+         const_cast<NoteTrack*>(t),
+         t->GetOffset() + offset);
    }
-   Prime(send, startTime + offset);
-}
-
-Iterator::~Iterator()
-{
-   it.end();
-}
-
-void Iterator::Prime(bool send, double startTime)
-{
    GetNextEvent(); // prime the pump for FillOtherBuffers
 
    // Start MIDI from current cursor position
+   mSendMidiState = true;
    while (mNextEvent &&
-          GetNextEventTime() < startTime) {
-      if (send)
-         /*
-          hasSolo argument doesn't matter because midiStateOnly is true.
-          "Fast-forward" all update events from the start of track to the given
-          play start time so the notes sound with correct timbre whenever
-          turned on.
-          */
-         OutputEvent(0, true, false);
+          mNextEventTime < mPlaybackSchedule.mT0 + offset) {
+      if (send) OutputEvent(0);
       GetNextEvent();
    }
-}
-
-double Iterator::GetNextEventTime() const
-{
-   if (mNextEvent == &gAllNotesOff)
-      return mNextEventTime - ALG_EPS;
-   return mNextEventTime;
+   mSendMidiState = false;
 }
 
 bool MIDIPlay::StartPortMidiStream(double rate)
@@ -729,7 +696,7 @@ bool MIDIPlay::StartPortMidiStream(double rate)
       mMidiLoopPasses = 0;
       mMidiOutputComplete = false;
       mMaxMidiTimestamp = 0;
-      PrepareMidiIterator(true, mPlaybackSchedule.mT0, 0);
+      PrepareMidiIterator(true, 0);
 
       // It is ok to call this now, but do not send timestamped midi
       // until after the first audio callback, which provides necessary
@@ -764,7 +731,7 @@ void MIDIPlay::StopOtherStream()
       }
       Pm_Close(mMidiStream);
       mMidiStream = NULL;
-      mIterator.reset();
+      mIterator->end();
 
       // set in_use flags to false
       int nTracks = mMidiPlaybackTracks.size();
@@ -773,38 +740,31 @@ void MIDIPlay::StopOtherStream()
          Alg_seq_ptr seq = &t->GetSeq();
          seq->set_in_use(false);
       }
+
+      mIterator.reset(); // just in case someone tries to reference it
    }
 
    mMidiPlaybackTracks.clear();
 }
 
-double Iterator::UncorrectedMidiEventTime(double pauseTime)
+static Alg_update gAllNotesOff; // special event for loop ending
+// the fields of this event are never used, only the address is important
+
+double MIDIPlay::UncorrectedMidiEventTime(double pauseTime)
 {
    double time;
    if (mPlaybackSchedule.mEnvelope)
       time =
-         mPlaybackSchedule.RealDuration(
-            GetNextEventTime() - mMIDIPlay.MidiLoopOffset())
-         + mPlaybackSchedule.mT0 +
-           (mMIDIPlay.mMidiLoopPasses * mPlaybackSchedule.mWarpedLength);
+         mPlaybackSchedule.RealDuration(mNextEventTime - MidiLoopOffset())
+         + mPlaybackSchedule.mT0 + (mMidiLoopPasses *
+                                    mPlaybackSchedule.mWarpedLength);
    else
-      time = GetNextEventTime();
+      time = mNextEventTime;
 
    return time + pauseTime;
 }
 
-bool Iterator::Unmuted(bool hasSolo) const
-{
-   int channel = (mNextEvent->chan) & 0xF; // must be in [0..15]
-   if (!mNextEventTrack->IsVisibleChan(channel))
-      return false;
-   const bool channelIsMute = hasSolo
-      ? !mNextEventTrack->GetSolo()
-      : mNextEventTrack->GetMute();
-   return !channelIsMute;
-}
-
-bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
+void MIDIPlay::OutputEvent(double pauseTime)
 {
    int channel = (mNextEvent->chan) & 0xF; // must be in [0..15]
    int command = -1;
@@ -815,48 +775,40 @@ bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
 
    // 0.0005 is for rounding
    double time = eventTime + 0.0005 -
-                 (mMIDIPlay.mSynthLatency * 0.001);
+                 (mSynthLatency * 0.001);
 
    time += 1; // MidiTime() has a 1s offset
    // state changes have to go out without delay because the
    // midi stream time gets reset when playback starts, and
    // we don't want to leave any control changes scheduled for later
-   if (time < 0 || midiStateOnly)
-      time = 0;
+   if (time < 0 || mSendMidiState) time = 0;
    PmTimestamp timestamp = (PmTimestamp) (time * 1000); /* s to ms */
 
    // The special event gAllNotesOff means "end of playback, send
    // all notes off on all channels"
    if (mNextEvent == &gAllNotesOff) {
       bool looping = mPlaybackSchedule.GetPolicy().Looping(mPlaybackSchedule);
-      mMIDIPlay.AllNotesOff(looping);
-      return true;
+      AllNotesOff(looping);
+      if (looping) {
+         // jump back to beginning of loop
+         ++mMidiLoopPasses;
+         PrepareMidiIterator(false, MidiLoopOffset());
+      } else {
+         mNextEvent = nullptr;
+      }
+      return;
    }
 
-   // (RBD)
    // if mNextEvent's channel is visible, play it, visibility can
-   // be updated while playing.
-   
-   // Be careful: if we have a note-off,
+   // be updated while playing. Be careful: if we have a note-off,
    // then we must not pay attention to the channel selection
    // or mute/solo buttons because we must turn the note off
-   // even if the user changed something after the note began.
-
+   // even if the user changed something after the note began
    // Note that because multiple tracks can output to the same
    // MIDI channels, it is not a good idea to send "All Notes Off"
    // when the user presses the mute button. We have no easy way
    // to know what notes are sounding on any given muted track, so
    // we'll just wait for the note-off events to happen.
-
-   // (PRL)
-   // Does that mean, try to get right results when playing to the same SET
-   // of MIDI channels, but tracks play to different channels?  In the
-   // case that two unrelated tracks try to merge events, for notes that
-   // overlap in time, to the same channel -- then one track still turns off
-   // a note that another turned on.  Maybe the prevention of this case belongs
-   // to higher levels of the program, and should just be assumed here.
-
-   // (RBD)
    // Also note that note-offs are only sent when we call
    // mIterator->request_note_off(), so notes that are not played
    // will not generate random note-offs. There is the interesting
@@ -864,19 +816,13 @@ bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
    // and if playback resumes, the pending note-off events WILL also
    // be sent (but if that is a problem, there would also be a problem
    // in the non-pause case.
-   const bool sendIt = [&]{
-      const bool isNote = mNextEvent->is_note();
-      if (!(isNote && mNextIsNoteOn))
-         // Regardless of channel visibility state,
-         // always send note-off events,
-         // and update events (program change, control change, pressure, bend)
-         // in case the user changes the muting during play
-         return true;
-      return Unmuted(hasSolo);
-   }();
-   if (sendIt) {
+   if (((mNextEventTrack->IsVisibleChan(channel)) &&
+        // only play if note is not muted:
+        !((mHasSolo || mNextEventTrack->GetMute()) &&
+          !mNextEventTrack->GetSolo())) ||
+       (mNextEvent->is_note() && !mNextIsNoteOn)) {
       // Note event
-      if (mNextEvent->is_note() && !midiStateOnly) {
+      if (mNextEvent->is_note() && !mSendMidiState) {
          // Pitch and velocity
          data1 = mNextEvent->get_pitch();
          if (mNextIsNoteOn) {
@@ -886,20 +832,20 @@ bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
             // clip velocity to insure a legal note-on value
             data2 = (data2 < 1 ? 1 : (data2 > 127 ? 127 : data2));
             // since we are going to play this note, we need to get a note_off
-            it.request_note_off();
+            mIterator->request_note_off();
 
 #ifdef AUDIO_IO_GB_MIDI_WORKAROUND
-            mMIDIPlay.mPendingNotesOff.push_back(std::make_pair(channel, data1));
+            mPendingNotesOff.push_back(std::make_pair(channel, data1));
 #endif
          }
          else {
             data2 = 0; // 0 velocity means "note off"
 #ifdef AUDIO_IO_GB_MIDI_WORKAROUND
-            auto end = mMIDIPlay.mPendingNotesOff.end();
+            auto end = mPendingNotesOff.end();
             auto iter = std::find(
-               mMIDIPlay.mPendingNotesOff.begin(), end, std::make_pair(channel, data1) );
+               mPendingNotesOff.begin(), end, std::make_pair(channel, data1) );
             if (iter != end)
-               mMIDIPlay.mPendingNotesOff.erase(iter);
+               mPendingNotesOff.erase(iter);
 #endif
          }
          command = 0x90; // MIDI NOTE ON (or OFF when velocity == 0)
@@ -951,10 +897,10 @@ bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
       }
       if (command != -1) {
          // keep track of greatest timestamp used
-         if (timestamp > mMIDIPlay.mMaxMidiTimestamp) {
-            mMIDIPlay.mMaxMidiTimestamp = timestamp;
+         if (timestamp > mMaxMidiTimestamp) {
+            mMaxMidiTimestamp = timestamp;
          }
-         Pm_WriteShort(mMIDIPlay.mMidiStream, timestamp,
+         Pm_WriteShort(mMidiStream, timestamp,
                     Pm_Message((int) (command + channel),
                                   (long) data1, (long) data2));
          /* wxPrintf("Pm_WriteShort %lx (%p) @ %d, advance %d\n",
@@ -963,16 +909,19 @@ bool Iterator::OutputEvent(double pauseTime, bool midiStateOnly, bool hasSolo)
                            mNextEvent, timestamp, timestamp - Pt_Time()); */
       }
    }
-   return false;
 }
 
-void Iterator::GetNextEvent()
+void MIDIPlay::GetNextEvent()
 {
    mNextEventTrack = nullptr; // clear it just to be safe
    // now get the next event and the track from which it came
    double nextOffset;
-   auto midiLoopOffset = mMIDIPlay.MidiLoopOffset();
-   mNextEvent = it.next(&mNextIsNoteOn,
+   if (!mIterator) {
+        mNextEvent = nullptr;
+        return;
+   }
+   auto midiLoopOffset = MidiLoopOffset();
+   mNextEvent = mIterator->next(&mNextIsNoteOn,
       // Allegro retrieves the "cookie" for the event, which is a NoteTrack
       reinterpret_cast<void **>(&mNextEventTrack),
       &nextOffset, mPlaybackSchedule.mT1 + midiLoopOffset);
@@ -984,10 +933,20 @@ void Iterator::GetNextEvent()
    }
    if (mNextEventTime > (mPlaybackSchedule.mT1 + midiLoopOffset)){ // terminate playback at mT1
       mNextEvent = &gAllNotesOff;
-      mNextEventTime = mPlaybackSchedule.mT1 + midiLoopOffset;
+      mNextEventTime = mPlaybackSchedule.mT1 + midiLoopOffset - ALG_EPS;
       mNextIsNoteOn = true; // do not look at duration
+      mIterator->end();
+      mIterator.reset(); // debugging aid
    }
 }
+
+
+bool MIDIPlay::SetHasSolo(bool hasSolo)
+{
+   mHasSolo = hasSolo;
+   return mHasSolo;
+}
+
 
 void MIDIPlay::FillOtherBuffers(
    double rate, unsigned long pauseFrames, bool paused, bool hasSolo)
@@ -995,11 +954,22 @@ void MIDIPlay::FillOtherBuffers(
    if (!mMidiStream)
       return;
 
-   // If not paused, fill buffers.
-   if (paused)
+   // Keep track of time paused. If not paused, fill buffers.
+   if (paused) {
+      if (!mMidiPaused) {
+         mMidiPaused = true;
+         AllNotesOff(); // to avoid hanging notes during pause
+      }
       return;
+   }
 
-   // If we compute until GetNextEventTime() > current audio time,
+   if (mMidiPaused) {
+      mMidiPaused = false;
+   }
+
+   SetHasSolo(hasSolo);
+
+   // If we compute until mNextEventTime > current audio time,
    // we would have a built-in compute-ahead of mAudioOutLatency, and
    // it's probably good to compute MIDI when we compute audio (so when
    // we stop, both stop about the same time).
@@ -1010,20 +980,10 @@ void MIDIPlay::FillOtherBuffers(
    if (actual_latency > mAudioOutLatency) {
        time += actual_latency - mAudioOutLatency;
    }
-   while (mIterator &&
-          mIterator->mNextEvent &&
-          mIterator->UncorrectedMidiEventTime(PauseTime(rate, pauseFrames)) < time) {
-      if (mIterator->OutputEvent(PauseTime(rate, pauseFrames), false, hasSolo)) {
-         if (mPlaybackSchedule.GetPolicy().Looping(mPlaybackSchedule)) {
-            // jump back to beginning of loop
-            ++mMidiLoopPasses;
-            PrepareMidiIterator(false, mPlaybackSchedule.mT0, MidiLoopOffset());
-         }
-         else
-            mIterator.reset();
-      }
-      else if (mIterator)
-         mIterator->GetNextEvent();
+   while (mNextEvent &&
+          UncorrectedMidiEventTime(PauseTime(rate, pauseFrames)) < time) {
+      OutputEvent(PauseTime(rate, pauseFrames));
+      GetNextEvent();
    }
 }
 
@@ -1114,7 +1074,7 @@ void MIDIPlay::AllNotesOff(bool looping)
    }
 }
 
-void MIDIPlay::ComputeOtherTimings(double rate, bool paused,
+void MIDIPlay::ComputeOtherTimings(double rate,
    const PaStreamCallbackTimeInfo *timeInfo,
    unsigned long framesPerBuffer
    )
@@ -1178,16 +1138,6 @@ void MIDIPlay::ComputeOtherTimings(double rate, bool paused,
 
    mAudioFramesPerBuffer = framesPerBuffer;
    mNumFrames += framesPerBuffer;
-
-   // Keep track of time paused.
-   if (paused) {
-      if (!mMidiPaused) {
-         mMidiPaused = true;
-         AllNotesOff(); // to avoid hanging notes during pause
-      }
-   }
-   else if (mMidiPaused)
-      mMidiPaused = false;
 }
 
 unsigned MIDIPlay::CountOtherSoloTracks() const

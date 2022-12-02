@@ -67,12 +67,12 @@ SpectrumPrefs::~SpectrumPrefs()
       Rollback();
 }
 
-ComponentInterfaceSymbol SpectrumPrefs::GetSymbol() const
+ComponentInterfaceSymbol SpectrumPrefs::GetSymbol()
 {
    return SPECTRUM_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString SpectrumPrefs::GetDescription() const
+TranslatableString SpectrumPrefs::GetDescription()
 {
    return XO("Preferences for Spectrum");
 }

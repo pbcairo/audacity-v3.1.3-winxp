@@ -21,10 +21,10 @@
 
 class WaveTrack;
 
-class EffectSimpleMono /* not final */ : public StatefulEffect
+class EffectSimpleMono /* not final */ : public Effect
 {
 public:
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
+   bool Process() override;
 
 protected:
 

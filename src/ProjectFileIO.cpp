@@ -25,12 +25,10 @@ Paul Licameli split from AudacityProject.cpp
 #include "CodeConversions.h"
 #include "DBConnection.h"
 #include "Project.h"
-#include "ProjectHistory.h"
 #include "ProjectSerializer.h"
 #include "ProjectWindows.h"
 #include "SampleBlock.h"
 #include "TempDirectory.h"
-#include "TransactionScope.h"
 #include "WaveTrack.h"
 #include "widgets/AudacityMessageBox.h"
 #include "BasicUI.h"
@@ -1047,7 +1045,7 @@ bool ProjectFileIO::CopyTo(const FilePath &destpath,
 
          // Rollback transaction in case one was active.
          // If this fails (probably due to memory or disk space), the transaction will
-         // (presumably) still be active, so further updates to the project file will
+         // (presumably) stil be active, so further updates to the project file will
          // fail as well. Not really much we can do about it except tell the user.
          auto result = sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, nullptr);
 
@@ -1362,8 +1360,7 @@ bool ProjectFileIO::RenameOrWarn(const FilePath &src, const FilePath &dst)
    // Wait for the checkpoints to end
    while (!done)
    {
-      using namespace std::chrono;
-      std::this_thread::sleep_for(50ms);
+      wxMilliSleep(50);
       pd->Pulse();
    }
    thread.join();
@@ -1563,7 +1560,7 @@ void ProjectFileIO::Compact(
 
                   if (!wxRenameFile(origName, tempName))
                   {
-                     wxLogWarning(wxT("Compaction failed to rename original %s to temp %s"),
+                     wxLogWarning(wxT("Compaction failed to rename orignal %s to temp %s"),
                                   origName, tempName);
                   }
                }
@@ -1822,7 +1819,8 @@ void ProjectFileIO::WriteXML(XMLWriter &xmlFile,
    xmlFile.WriteAttr(wxT("version"), wxT(AUDACITY_FILE_FORMAT_VERSION));
    xmlFile.WriteAttr(wxT("audacityversion"), AUDACITY_VERSION_STRING);
 
-   ProjectFileIORegistry::Get().CallWriters(proj, xmlFile);
+   ProjectFileIORegistry::Get().CallAttributeWriters(proj, xmlFile);
+   ProjectFileIORegistry::Get().CallObjectWriters(proj, xmlFile);
 
    tracklist.Any().Visit([&](const Track *t)
    {
@@ -1896,7 +1894,7 @@ bool ProjectFileIO::WriteDoc(const char *table,
 {
    auto db = DB();
 
-   TransactionScope transaction(mProject, "UpdateProject");
+   TransactionScope transaction(GetConnection(), "UpdateProject");
 
    int rc;
 
@@ -1967,7 +1965,7 @@ bool ProjectFileIO::WriteDoc(const char *table,
       return false;
    }
 
-   // Finalize the statement before committing the transaction
+   // Finalize the statement before commiting the transaction
    sqlite3_finalize(stmt);
    stmt = nullptr;
 
@@ -2303,8 +2301,7 @@ bool ProjectFileIO::SaveProject(
          // Wait for the checkpoints to end
          while (!done)
          {
-            using namespace std::chrono;
-            std::this_thread::sleep_for(50ms);
+            wxMilliSleep(50);
             pd->Pulse();
          }
          thread.join();
@@ -2692,7 +2689,7 @@ FROM sampleblocks WHERE blockid = ?1;)";
 }
 
 InvisibleTemporaryProject::InvisibleTemporaryProject()
-   : mpProject{ AudacityProject::Create() }
+   : mpProject{ std::make_shared< AudacityProject >() }
 {
 }
 
@@ -2712,16 +2709,3 @@ InvisibleTemporaryProject::~InvisibleTemporaryProject()
    mpProject.reset();
    try { wxTheApp->Yield(); } catch(...) {}
 }
-
-//! Install the callback from undo manager
-static ProjectHistory::AutoSave::Scope scope {
-[](AudacityProject &project) {
-   auto &projectFileIO = ProjectFileIO::Get(project);
-   if ( !projectFileIO.AutoSave() )
-      throw SimpleMessageBoxException{
-         ExceptionType::Internal,
-         XO("Automatic database backup failed."),
-         XO("Warning"),
-         "Error:_Disk_full_or_not_writable"
-      };
-} };

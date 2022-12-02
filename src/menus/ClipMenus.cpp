@@ -1,9 +1,9 @@
 #include "../CommonCommandFlags.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "../ProjectSettings.h"
 #include "../TrackPanelAx.h"
 #include "../ProjectWindow.h"
-#include "UndoManager.h"
+#include "../UndoManager.h"
 #include "../WaveClip.h"
 #include "ViewInfo.h"
 #include "../WaveTrack.h"
@@ -19,20 +19,24 @@ struct FoundTrack {
    int trackNum{};
    bool channel{};
 
-   wxString ComposeTrackName() const
+   TranslatableString ComposeTrackName() const
    {
-      /* i18n-hint: The %d is replaced by the number of the track.*/
-      auto shortName = wxString::Format(_("Track %d"), trackNum).Append(" " + waveTrack->GetName());
+      auto name = waveTrack->GetName();
+      auto shortName = name == waveTrack->GetDefaultName()
+         /* i18n-hint: compose a name identifying an unnamed track by number */
+         ? XO("Track %d").Format( trackNum )
+         : Verbatim(name);
+      auto longName = shortName;
       if (channel) {
          // TODO: more-than-two-channels-message
          if ( waveTrack->IsLeader() )
          /* i18n-hint: given the name of a track, specify its left channel */
-            return XO("%s left").Translation().Format(shortName);
+            longName = XO("%s left").Format(shortName);
          else
          /* i18n-hint: given the name of a track, specify its right channel */
-            return XO("%s right").Translation().Format(shortName);
+            longName = XO("%s right").Format(shortName);
       }
-      return shortName;
+      return longName;
    }
 };
 
@@ -843,7 +847,7 @@ BaseItemSharedPtr ClipSelectMenu()
 
    static BaseItemSharedPtr menu {
    ( FinderScope{ findCommandHandler },
-   Menu( wxT("Clip"), XXO("Audi&o Clips"),
+   Menu( wxT("Clip"), XXO("Clip B&oundaries"),
       Command( wxT("SelPrevClipBoundaryToCursor"),
          XXO("Pre&vious Clip Boundary to Cursor"),
          FN(OnSelectPrevClipBoundaryToCursor),

@@ -97,9 +97,7 @@ class SpectralDataDialog final : public wxDialogWrapper,
 
          explicit SpectralDataDialog(AudacityProject &parent);
 
-         void UpdateDisplayForClipboard(wxEvent &e);
-         void UpdateDisplay(UndoRedoMessage);
-         void DoUpdateDisplay();
+         void UpdateDisplay(wxEvent &e);
          void UpdateControls( bool active );
 
          bool Show( bool show = true ) override;
@@ -107,7 +105,7 @@ class SpectralDataDialog final : public wxDialogWrapper,
       private:
          void Populate(ShuttleGui & S);
 
-         void OnAudioIO(AudioIOEvent ev);
+         void OnAudioIO(wxCommandEvent & evt);
          void DoUpdate();
 
          void OnCloseWindow(wxCloseEvent &event);
@@ -120,9 +118,6 @@ class SpectralDataDialog final : public wxDialogWrapper,
          // PrefsListener implementation
          void UpdatePrefs() override;
 
-         Observer::Subscription mAudioIOSubscription
-            , mUndoSubscription
-         ;
          AudacityProject   &mProject;
          wxToggleButton *mBrushButton = nullptr;
          bool              mAudioIOBusy { false };
@@ -172,14 +167,21 @@ SpectralDataDialog::SpectralDataDialog(AudacityProject &parent)
    Populate(S);
    CentreOnParent();
 
-   mAudioIOSubscription = AudioIO::Get()
-      ->Subscribe(*this, &SpectralDataDialog::OnAudioIO);
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK,
+                  &SpectralDataDialog::OnAudioIO,
+                  this);
 
-   Clipboard::Get().Bind( EVT_CLIPBOARD_CHANGE,
-      &::SpectralDataDialog::UpdateDisplayForClipboard, this);
+   wxTheApp->Bind(EVT_AUDIOIO_CAPTURE,
+                  &SpectralDataDialog::OnAudioIO,
+                  this);
 
-   mUndoSubscription = UndoManager::Get(parent)
-      .Subscribe(*this, &SpectralDataDialog::UpdateDisplay);
+   Clipboard::Get().Bind(
+         EVT_CLIPBOARD_CHANGE, &SpectralDataDialog::UpdateDisplay, this);
+   parent.Bind(EVT_UNDO_PUSHED, &SpectralDataDialog::UpdateDisplay, this);
+   parent.Bind(EVT_UNDO_MODIFIED, &SpectralDataDialog::UpdateDisplay, this);
+   parent.Bind(EVT_UNDO_OR_REDO, &SpectralDataDialog::UpdateDisplay, this);
+   parent.Bind(EVT_UNDO_RESET, &SpectralDataDialog::UpdateDisplay, this);
+   parent.Bind(EVT_UNDO_PURGE, &SpectralDataDialog::UpdateDisplay, this);
 
    DoToolChanged();
 }
@@ -239,35 +241,19 @@ void SpectralDataDialog::Populate(ShuttleGui & S)
    SetMinSize(GetSize());
 }
 
-void SpectralDataDialog::OnAudioIO(AudioIOEvent ev)
+void SpectralDataDialog::OnAudioIO(wxCommandEvent& evt)
 {
-   if (ev.type != AudioIOEvent::MONITOR)
-      mAudioIOBusy = ev.on;
+   evt.Skip();
+
+   if (evt.GetInt() != 0)
+      mAudioIOBusy = true;
+   else
+      mAudioIOBusy = false;
 }
 
-void SpectralDataDialog::UpdateDisplayForClipboard(wxEvent& e)
+void SpectralDataDialog::UpdateDisplay(wxEvent& e)
 {
    e.Skip();
-   DoUpdateDisplay();
-}
-
-void SpectralDataDialog::UpdateDisplay(UndoRedoMessage message)
-{
-   switch (message.type) {
-   case UndoRedoMessage::Pushed:
-   case UndoRedoMessage::Modified:
-   case UndoRedoMessage::UndoOrRedo:
-   case UndoRedoMessage::Reset:
-   case UndoRedoMessage::Purge:
-      break;
-   default:
-      return;
-   }
-   DoUpdateDisplay();
-}
-
-void SpectralDataDialog::DoUpdateDisplay()
-{
    if(IsShown())
       DoUpdate();
 }

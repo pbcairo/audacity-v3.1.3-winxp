@@ -26,7 +26,7 @@ Paul Licameli split from TrackPanel.cpp
 
 TrackPanelResizerCell::TrackPanelResizerCell(
    const std::shared_ptr<Track> &pTrack )
-   : CommonTrackCell{ pTrack }
+   : mwTrack{ pTrack }
 {}
 
 std::vector<UIHandlePtr> TrackPanelResizerCell::HitTest
@@ -42,6 +42,11 @@ std::vector<UIHandlePtr> TrackPanelResizerCell::HitTest
       results.push_back(result);
    }
    return results;
+}
+
+std::shared_ptr<Track> TrackPanelResizerCell::DoFindTrack()
+{
+   return mwTrack.lock();
 }
 
 void TrackPanelResizerCell::Draw(

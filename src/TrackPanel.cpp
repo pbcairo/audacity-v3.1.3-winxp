@@ -47,6 +47,7 @@ is time to refresh some aspect of the screen.
 #include "TrackPanel.h"
 #include "TrackPanelConstants.h"
 
+#include <wx/app.h>
 #include <wx/setup.h> // for wxUSE_* macros
 
 #include "AdornedRulerPanel.h"
@@ -61,9 +62,9 @@ is time to refresh some aspect of the screen.
 #include "ProjectStatus.h"
 #include "ProjectWindow.h"
 #include "Theme.h"
-#include "TrackArt.h"
 #include "TrackPanelMouseEvent.h"
 #include "TrackPanelResizeHandle.h"
+//#define DEBUG_DRAW_TIMING 1
 
 #include "UndoManager.h"
 
@@ -79,8 +80,6 @@ is time to refresh some aspect of the screen.
 #include "TrackPanelResizerCell.h"
 #include "WaveTrack.h"
 
-#include "FrameStatistics.h"
-
 #include "tracks/ui/TrackControls.h"
 #include "tracks/ui/TrackView.h"
 #include "tracks/ui/TrackVRulerControls.h"
@@ -93,8 +92,6 @@ is time to refresh some aspect of the screen.
 #include <wx/dc.h>
 #include <wx/dcclient.h>
 #include <wx/graphics.h>
-
-#include "effects/RealtimeEffectManager.h"
 
 static_assert( kVerticalPadding == kTopMargin + kBottomMargin );
 static_assert( kTrackInfoBtnSize == kAffordancesAreaHeight, "Drag bar is misaligned with the menu button");
@@ -208,7 +205,7 @@ AttachedWindows::RegisteredFactory sKey{
       auto &ruler = AdornedRulerPanel::Get( project );
       auto &viewInfo = ViewInfo::Get( project );
       auto &window = ProjectWindow::Get( project );
-      auto mainPage = window.GetTrackListWindow();
+      auto mainPage = window.GetMainPage();
       wxASSERT( mainPage ); // to justify safenew
 
       auto &tracks = TrackList::Get( project );
@@ -297,41 +294,33 @@ TrackPanel::TrackPanel(wxWindow * parent, wxWindowID id,
       &TrackPanel::OnIdle, this);
 
    // Register for tracklist updates
-   mTrackListSubscription =
-   mTracks->Subscribe([this](const TrackListEvent &event){
-      switch (event.mType) {
-      case TrackListEvent::RESIZING:
-      case TrackListEvent::ADDITION:
-         OnTrackListResizing(event); break;
-      case TrackListEvent::DELETION:
-         OnTrackListDeletion(); break;
-      case TrackListEvent::TRACK_REQUEST_VISIBLE:
-         OnEnsureVisible(event); break;
-      default:
-         break;
-      }
-   });
+   mTracks->Bind(EVT_TRACKLIST_RESIZING,
+                    &TrackPanel::OnTrackListResizing,
+                    this);
+   mTracks->Bind(EVT_TRACKLIST_ADDITION,
+                    &TrackPanel::OnTrackListResizing,
+                    this);
+   mTracks->Bind(EVT_TRACKLIST_DELETION,
+                    &TrackPanel::OnTrackListDeletion,
+                    this);
+   mTracks->Bind(EVT_TRACKLIST_TRACK_REQUEST_VISIBLE,
+                    &TrackPanel::OnEnsureVisible,
+                    this);
 
    auto theProject = GetProject();
    theProject->Bind(
       EVT_PROJECT_SETTINGS_CHANGE, &TrackPanel::OnProjectSettingsChange, this);
-   mFocusChangeSubscription = TrackFocus::Get(*theProject)
-      .Subscribe(*this, &TrackPanel::OnTrackFocusChange);
+   theProject->Bind(
+      EVT_TRACK_FOCUS_CHANGE, &TrackPanel::OnTrackFocusChange, this );
 
-   mUndoSubscription = UndoManager::Get(*theProject)
-      .Subscribe(*this, &TrackPanel::OnUndoReset);
+   theProject->Bind(EVT_UNDO_RESET, &TrackPanel::OnUndoReset, this);
 
-   mAudioIOSubscription =
-      AudioIO::Get()->Subscribe(*this, &TrackPanel::OnAudioIO);
-
-   mRealtimeEffectManagerSubscription = RealtimeEffectManager::Get(*theProject)
-      .Subscribe([this](const RealtimeEffectManagerMessage& msg)
-      {
-         if(msg.track)
-            //update "effects" button 
-            RefreshTrack(msg.track.get());
-      });
-
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK,
+                     &TrackPanel::OnAudioIO,
+                     this);
+   wxTheApp->Bind(EVT_AUDIOIO_CAPTURE,
+                     &TrackPanel::OnAudioIO,
+                     this);
    UpdatePrefs();
 }
 
@@ -359,16 +348,22 @@ void TrackPanel::UpdatePrefs()
 /// goes with this track panel.
 AudacityProject * TrackPanel::GetProject() const
 {
-   auto window = GetParent();
-
-   while(window != nullptr)
-   {
-      if(const auto projectWindow = dynamic_cast<ProjectWindow*>(window))
-         return projectWindow->FindProject().get();
-
-      window = window->GetParent();
-   }
-   return nullptr;
+   //JKC casting away constness here.
+   //Do it in two stages in case 'this' is not a wxWindow.
+   //when the compiler will flag the error.
+   wxWindow const * const pConstWind = this;
+   wxWindow * pWind=(wxWindow*)pConstWind;
+#ifdef EXPERIMENTAL_NOTEBOOK
+   pWind = pWind->GetParent(); //Page
+   wxASSERT( pWind );
+   pWind = pWind->GetParent(); //Notebook
+   wxASSERT( pWind );
+#endif
+   pWind = pWind->GetParent(); //MainPanel
+   wxASSERT( pWind );
+   pWind = pWind->GetParent(); //ProjectWindow
+   wxASSERT( pWind );
+   return &static_cast<ProjectWindow*>( pWind )->GetProject();
 }
 
 void TrackPanel::OnSize( wxSizeEvent &evt )
@@ -385,7 +380,7 @@ void TrackPanel::OnIdle(wxIdleEvent& event)
    // The window must be ready when the timer fires (#1401)
    if (IsShownOnScreen())
    {
-      mTimer.Start(std::chrono::milliseconds{kTimerInterval}.count(), FALSE);
+      mTimer.Start(kTimerInterval, FALSE);
 
       // Timer is started, we don't need the event anymore
       GetProjectFrame( *GetProject() ).Unbind(wxEVT_IDLE,
@@ -432,7 +427,10 @@ void TrackPanel::OnTimer(wxTimerEvent& )
    }
 
    // Notify listeners for timer ticks
-   window.GetPlaybackScroller().OnTimer();
+   {
+      wxCommandEvent e(EVT_TRACK_PANEL_TIMER);
+      p->ProcessEvent(e);
+   }
 
    DrawOverlays(false);
    mRuler->DrawOverlays(false);
@@ -464,12 +462,11 @@ void TrackPanel::OnProjectSettingsChange( wxCommandEvent &event )
    }
 }
 
-void TrackPanel::OnUndoReset(UndoRedoMessage message)
+void TrackPanel::OnUndoReset( wxCommandEvent &event )
 {
-   if (message.type == UndoRedoMessage::Reset) {
-      TrackFocus::Get( *GetProject() ).Set( nullptr );
-      Refresh( false );
-   }
+   event.Skip();
+   TrackFocus::Get( *GetProject() ).Set( nullptr );
+   Refresh( false );
 }
 
 /// AS: OnPaint( ) is called during the normal course of
@@ -478,8 +475,9 @@ void TrackPanel::OnPaint(wxPaintEvent & /* event */)
 {
    mLastDrawnSelectedRegion = mViewInfo->selectedRegion;
 
-   auto sw =
-      FrameStatistics::CreateStopwatch(FrameStatistics::SectionID::TrackPanel);
+#if DEBUG_DRAW_TIMING
+   wxStopWatch sw;
+#endif
 
    {
       wxPaintDC dc(this);
@@ -515,6 +513,12 @@ void TrackPanel::OnPaint(wxPaintEvent & /* event */)
       dc.DestroyClippingRegion();
       DrawOverlays(true, &dc);
    }
+
+#if DEBUG_DRAW_TIMING
+   sw.Pause();
+   wxLogDebug(wxT("Total: %ld milliseconds"), sw.Time());
+   wxPrintf(wxT("Total: %ld milliseconds\n"), sw.Time());
+#endif
 }
 
 void TrackPanel::MakeParentRedrawScrollbars()
@@ -662,20 +666,21 @@ void TrackPanel::UpdateViewIfNoTracks()
 
 // The tracks positions within the list have changed, so update the vertical
 // ruler size for the track that triggered the event.
-void TrackPanel::OnTrackListResizing(const TrackListEvent &e)
+void TrackPanel::OnTrackListResizing(TrackListEvent & e)
 {
    auto t = e.mpTrack.lock();
    // A deleted track can trigger the event.  In which case do nothing here.
    // A deleted track can have a valid pointer but no owner, bug 2060
    if( t && t->HasOwner() )
       UpdateVRuler(t.get());
+   e.Skip();
 
    // fix for bug 2477
    mListener->TP_RedrawScrollbars();
 }
 
 // Tracks have been removed from the list.
-void TrackPanel::OnTrackListDeletion()
+void TrackPanel::OnTrackListDeletion(wxEvent & e)
 {
    // copy shared_ptr for safety, as in HandleClick
    auto handle = Target();
@@ -688,6 +693,8 @@ void TrackPanel::OnTrackListDeletion()
    TrackFocus( *GetProject() ).Get();
 
    UpdateVRulerSize();
+
+   e.Skip();
 }
 
 void TrackPanel::OnKeyDown(wxKeyEvent & event)
@@ -703,7 +710,7 @@ void TrackPanel::OnKeyDown(wxKeyEvent & event)
    case WXK_PAGEDOWN:
       HandlePageDownKey();
       return;
-
+      
    default:
       // fall through to base class handler
       event.Skip();
@@ -719,7 +726,7 @@ void TrackPanel::OnMouseEvent(wxMouseEvent & event)
       // When this timer fires, we call TrackPanel::OnTimer and
       // possibly update the screen for offscreen scrolling.
       mTimer.Stop();
-      mTimer.Start(std::chrono::milliseconds{kTimerInterval}.count(), FALSE);
+      mTimer.Start(kTimerInterval, FALSE);
    }
 
 
@@ -804,10 +811,9 @@ void TrackPanel::Refresh(bool eraseBackground /* = TRUE */,
    CallAfter([this]{ CellularPanel::HandleCursorForPresentMouseState(); } );
 }
 
-void TrackPanel::OnAudioIO(AudioIOEvent evt)
+void TrackPanel::OnAudioIO(wxCommandEvent & evt)
 {
-   if (evt.type == AudioIOEvent::MONITOR)
-      return;
+   evt.Skip();
    // Some hit tests want to change their cursor to and from the ban symbol
    CallAfter( [this]{ CellularPanel::HandleCursorForPresentMouseState(); } );
 }
@@ -955,7 +961,7 @@ void TrackPanel::UpdateTrackVRuler(Track *t)
       const auto subViews = view.GetSubViews( rect );
       if (subViews.empty())
          continue;
-
+   
       auto iter = subViews.begin(), end = subViews.end(), next = iter;
       auto yy = iter->first;
       wxSize vRulerSize{ 0, 0 };
@@ -968,10 +974,10 @@ void TrackPanel::UpdateTrackVRuler(Track *t)
          // This causes ruler size in the track to be reassigned:
          TrackVRulerControls::Get( *iter->second ).UpdateRuler( rect );
          // But we want to know the maximum width and height over all sub-views:
-         vRulerSize.IncTo( {t->vrulerSize.first, t->vrulerSize.second} );
+         vRulerSize.IncTo( t->vrulerSize );
          yy = nextY;
       }
-      t->vrulerSize = {vRulerSize.x, vRulerSize.y};
+      t->vrulerSize = vRulerSize;
    }
 }
 
@@ -981,7 +987,7 @@ void TrackPanel::UpdateVRulerSize()
    if (trackRange) {
       wxSize s { 0, 0 };
       for (auto t : trackRange)
-         s.IncTo({t->vrulerSize.first, t->vrulerSize.second});
+         s.IncTo(t->vrulerSize);
 
       if (mViewInfo->GetVRulerWidth() != s.GetWidth()) {
          mViewInfo->SetVRulerWidth( s.GetWidth() );
@@ -999,9 +1005,10 @@ void TrackPanel::OnTrackMenu(Track *t)
 }
 
 // Tracks have been removed from the list.
-void TrackPanel::OnEnsureVisible(const TrackListEvent & e)
+void TrackPanel::OnEnsureVisible(TrackListEvent & e)
 {
-   bool modifyState = e.mExtra;
+   e.Skip();
+   bool modifyState = e.GetInt();
 
    auto pTrack = e.mpTrack.lock();
    auto t = pTrack.get();
@@ -1059,7 +1066,7 @@ void TrackPanel::VerticalScroll( float fracPosition){
    trackTop = range.sum( TrackView::GetChannelGroupHeight );
 
    int delta;
-
+   
    //Get the size of the trackpanel.
    int width, height;
    GetSize(&width, &height);
@@ -1189,7 +1196,7 @@ void DrawTrackName(
   The following classes define the subdivision of the area of the TrackPanel
   into cells with differing responses to mouse, keyboard, and scroll wheel
   events.
-
+  
   The classes defining the less inclusive areas are earlier, while those
   defining ever larger hierarchical groupings of cells are later.
 
@@ -1214,7 +1221,7 @@ void DrawTrackName(
   resize the channel views.
 
   Sixthly, divide each channel into one or more vertically stacked sub-views.
-
+  
   Lastly, split the area for each sub-view into a vertical ruler, and an area
   that displays the channel's own contents.
 
@@ -1239,7 +1246,7 @@ struct EmptyCell final : CommonTrackPanelCell {
       if ( iPass == TrackArtist::PassMargins ) {
          // Draw a margin area of TrackPanel
          auto dc = &context.dc;
-
+         
          AColor::TrackPanelBackground( dc, false );
          dc->DrawRectangle( rect );
       }
@@ -1376,9 +1383,9 @@ struct HorizontalGroup final : TrackPanelGroup {
 
    Refinement mRefinement;
 
-   HorizontalGroup(Refinement refinement)
-      : mRefinement(std::move(refinement))
-   {
+   HorizontalGroup(Refinement refinement) 
+      : mRefinement(std::move(refinement)) 
+   { 
    }
 
    Subdivision Children(const wxRect& /*rect*/) override
@@ -1529,15 +1536,15 @@ struct LabeledChannelGroup final : TrackPanelGroup {
             wxRect theRect = rect;
             auto &dc = context.dc;
             dc.SetBrush(*wxTRANSPARENT_BRUSH);
-
+            
             AColor::TrackFocusPen( &dc, 2 );
             dc.DrawRectangle(theRect);
             theRect.Deflate(1);
-
+            
             AColor::TrackFocusPen( &dc, 1 );
             dc.DrawRectangle(theRect);
             theRect.Deflate(1);
-
+            
             AColor::TrackFocusPen( &dc, 0 );
             dc.DrawRectangle(theRect);
          }
@@ -1719,8 +1726,12 @@ void TrackPanel::SetFocusedCell()
    KeyboardCapture::Capture(this);
 }
 
-void TrackPanel::OnTrackFocusChange(TrackFocusChangeMessage)
+void TrackPanel::OnTrackFocusChange( wxCommandEvent &event )
 {
-   if (auto cell = GetFocusedCell())
+   event.Skip();
+   auto cell = GetFocusedCell();
+
+   if (cell) {
       Refresh( false );
+   }
 }

@@ -36,8 +36,6 @@ class TipWindow;
 
 #define VEL_SLIDER 5    // -50..50
 
-#define PERCENT_SLIDER 6 //0% .. 100%
-
 #define DB_MIN -36.0f
 #define DB_MAX 36.0f
 #define FRAC_MIN 0.0f
@@ -77,10 +75,6 @@ class AUDACITY_DLL_API LWSlider
             float stepValue,
             bool canUseShift,
             int style,
-            bool showlabels=true,
-            bool drawticks=true,
-            bool drawtrack=true,
-            bool alwayshidetip=false,
             bool heavyweight=false,
             bool popup=true,
             int orientation = wxHORIZONTAL); // wxHORIZONTAL or wxVERTICAL. wxVERTICAL is currently only for DB_SLIDER.
@@ -91,10 +85,6 @@ class AUDACITY_DLL_API LWSlider
             const wxPoint &pos,
             const wxSize &size,
             int style,
-            bool showlabels=true,
-            bool drawticks=true,
-            bool drawtrack=true,
-            bool alwayshidetip=false,
             bool heavyweight=false,
             bool popup=true,
             int orientation = wxHORIZONTAL); // wxHORIZONTAL or wxVERTICAL. wxVERTICAL is currently only for DB_SLIDER.
@@ -108,10 +98,6 @@ class AUDACITY_DLL_API LWSlider
              float stepValue,
              bool canUseShift,
              int style,
-             bool showlabels,
-             bool drawticks,
-             bool drawtrack,
-             bool alwayshidetip,
              bool heavyweight,
              bool popup,
              float speed,
@@ -121,8 +107,6 @@ class AUDACITY_DLL_API LWSlider
 
    wxWindowID GetId();
    void SetId(wxWindowID id);
-
-   void SetName(const TranslatableString& name);
 
    void SetDefaultValue(float value);
    void SetDefaultShortcut(bool value);
@@ -163,12 +147,8 @@ class AUDACITY_DLL_API LWSlider
    float GetMinValue() const;
    float GetMaxValue() const;
 
-   void SetParent(wxWindow *parent);
+   void SetParent(wxWindow *parent) { mParent = parent; }
    void SendUpdate(float newValue);
-
-   wxString GetStringValue() const;
-
-   void OnKillFocus();
 
  private:
 
@@ -190,12 +170,6 @@ class AUDACITY_DLL_API LWSlider
 
    int mStyle;
    int mOrientation; // wxHORIZONTAL or wxVERTICAL. wxVERTICAL is currently only for DB_SLIDER.
-
-   bool mShowLabels;
-   bool mDrawTicks;
-   bool mDrawTrack;
-
-   bool mAlwaysHideTip;
 
    bool mHW; // is it really heavyweight (in a window)
    bool mPopup; // should display dialog on double click
@@ -244,7 +218,7 @@ class AUDACITY_DLL_API LWSlider
 
    wxWindowID mID;
 
-   TipWindow* mTipPanel{nullptr};
+   std::unique_ptr<TipWindow> mTipPanel;
    TranslatableString mTipTemplate;
 
    bool mIsDragging;
@@ -266,10 +240,6 @@ class AUDACITY_DLL_API ASlider /* not final */ : public wxPanel
 
       int style{ FRAC_SLIDER };
       wxOrientation orientation{ wxHORIZONTAL };
-      bool showLabels{ true };
-      bool drawTicks{ true };
-      bool drawTrack{ true };
-      bool alwaysHideTip{ false };
       bool popup{ true };
       bool canUseShift{ true };
       float stepValue{ STEP_CONTINUOUS };
@@ -280,10 +250,6 @@ class AUDACITY_DLL_API ASlider /* not final */ : public wxPanel
       Options& Style( int s ) { style = s; return *this; }
       Options& Orientation( wxOrientation o )
          { orientation = o; return *this; }
-      Options& ShowLabels( bool l ) { showLabels = l; return *this; }
-      Options& DrawTicks( bool t ) { drawTicks = t; return *this; }
-      Options& DrawTrack( bool t ) { drawTrack = t; return *this; }
-      Options& AlwayHideTip( bool t) { alwaysHideTip = t; return * this; }
       Options& Popup( bool p ) { popup = p; return *this; }
       Options& CanUseShift( bool c ) { canUseShift = c; return *this; }
       Options& StepValue( float v ) { stepValue = v; return *this; }

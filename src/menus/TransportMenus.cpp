@@ -11,19 +11,18 @@
 #include "../ProjectAudioIO.h"
 #include "../ProjectAudioManager.h"
 #include "../ProjectFileIO.h"
-#include "ProjectHistory.h"
-#include "../ProjectManager.h"
+#include "../ProjectHistory.h"
 #include "ProjectRate.h"
 #include "../ProjectSettings.h"
 #include "../ProjectWindows.h"
 #include "../ProjectWindow.h"
+#include "../ProjectManager.h"
 #include "../SelectUtilities.h"
 #include "../SoundActivatedRecord.h"
 #include "../TimerRecordDialog.h"
 #include "../TrackPanelAx.h"
 #include "../TrackPanel.h"
-#include "../TransportUtilities.h"
-#include "UndoManager.h"
+#include "../UndoManager.h"
 #include "../WaveClip.h"
 #include "../prefs/RecordingPrefs.h"
 #include "../prefs/TracksPrefs.h"
@@ -37,12 +36,129 @@
 #include "BasicUI.h"
 #include "../widgets/ProgressDialog.h"
 
-#include <thread>
 #include <float.h>
 #include <wx/app.h>
 
 // private helper classes and functions
 namespace {
+
+void PlayCurrentRegionAndWait(const CommandContext &context,
+                              bool newDefault = false,
+                              bool cutpreview = false)
+{
+   auto &project = context.project;
+   auto &projectAudioManager = ProjectAudioManager::Get(project);
+
+   const auto &playRegion = ViewInfo::Get(project).playRegion;
+   double t0 = playRegion.GetStart();
+   double t1 = playRegion.GetEnd();
+
+   projectAudioManager.PlayCurrentRegion(newDefault, cutpreview);
+
+   if (project.mBatchMode > 0 && t0 != t1 && !newDefault) {
+      wxYieldIfNeeded();
+
+      /* i18n-hint: This title appears on a dialog that indicates the progress
+         in doing something.*/
+      ProgressDialog progress(XO("Progress"), XO("Playing"), pdlgHideCancelButton);
+      auto gAudioIO = AudioIO::Get();
+
+      while (projectAudioManager.Playing()) {
+         ProgressResult result = progress.Update(gAudioIO->GetStreamTime() - t0, t1 - t0);
+         if (result != ProgressResult::Success) {
+            projectAudioManager.Stop();
+            if (result != ProgressResult::Stopped) {
+               context.Error(wxT("Playing interrupted"));
+            }
+            break;
+         }
+
+         wxMilliSleep(100);
+         wxYieldIfNeeded();
+      }
+
+      projectAudioManager.Stop();
+      wxYieldIfNeeded();
+   }
+}
+
+void PlayPlayRegionAndWait(const CommandContext &context,
+                           const SelectedRegion &selectedRegion,
+                           const AudioIOStartStreamOptions &options,
+                           PlayMode mode)
+{
+   auto &project = context.project;
+   auto &projectAudioManager = ProjectAudioManager::Get(project);
+
+   double t0 = selectedRegion.t0();
+   double t1 = selectedRegion.t1();
+
+   projectAudioManager.PlayPlayRegion(selectedRegion, options, mode);
+
+   if (project.mBatchMode > 0) {
+      wxYieldIfNeeded();
+
+      /* i18n-hint: This title appears on a dialog that indicates the progress
+         in doing something.*/
+      ProgressDialog progress(XO("Progress"), XO("Playing"), pdlgHideCancelButton);
+      auto gAudioIO = AudioIO::Get();
+
+      while (projectAudioManager.Playing()) {
+         ProgressResult result = progress.Update(gAudioIO->GetStreamTime() - t0, t1 - t0);
+         if (result != ProgressResult::Success) {
+            projectAudioManager.Stop();
+            if (result != ProgressResult::Stopped) {
+               context.Error(wxT("Playing interrupted"));
+            }
+            break;
+         }
+
+         wxMilliSleep(100);
+         wxYieldIfNeeded();
+      }
+
+      projectAudioManager.Stop();
+      wxYieldIfNeeded();
+   }
+}
+
+void RecordAndWait(const CommandContext &context, bool altAppearance)
+{
+   auto &project = context.project;
+   auto &projectAudioManager = ProjectAudioManager::Get(project);
+
+   const auto &selectedRegion = ViewInfo::Get(project).selectedRegion;
+   double t0 = selectedRegion.t0();
+   double t1 = selectedRegion.t1();
+
+   projectAudioManager.OnRecord(altAppearance);
+
+   if (project.mBatchMode > 0 && t1 != t0) {
+      wxYieldIfNeeded();
+
+      /* i18n-hint: This title appears on a dialog that indicates the progress
+         in doing something.*/
+      ProgressDialog progress(XO("Progress"), XO("Recording"), pdlgHideCancelButton);
+      auto gAudioIO = AudioIO::Get();
+
+      while (projectAudioManager.Recording()) {
+         ProgressResult result = progress.Update(gAudioIO->GetStreamTime() - t0, t1 - t0);
+         if (result != ProgressResult::Success) {
+            projectAudioManager.Stop();
+            if (result != ProgressResult::Stopped) {
+               context.Error(wxT("Recording interrupted"));
+            }
+            break;
+         }
+
+         wxMilliSleep(100);
+         wxYieldIfNeeded();
+      }
+
+      projectAudioManager.Stop();
+      wxYieldIfNeeded();
+   }
+}
 
 // TODO: Should all these functions which involve
 // the toolbar actually move into ControlToolBar?
@@ -66,8 +182,7 @@ bool MakeReadyToPlay(AudacityProject &project)
       toolbar.SetStop();         //Pushes stop down
       toolbar.OnStop(evt);
 
-      using namespace std::chrono;
-      std::this_thread::sleep_for(100ms);
+      ::wxMilliSleep(100);
    }
 
    // If it didn't stop playing quickly, or if some other
@@ -76,6 +191,62 @@ bool MakeReadyToPlay(AudacityProject &project)
       return false;
 
    return true;
+}
+
+// Returns true if this project was stopped, otherwise false.
+// (it may though have stopped another project playing)
+bool DoStopPlaying(const CommandContext &context)
+{
+   auto &project = context.project;
+   auto &projectAudioManager = ProjectAudioManager::Get(project);
+   auto gAudioIO = AudioIOBase::Get();
+   auto &toolbar = ControlToolBar::Get(project);
+   auto token = ProjectAudioIO::Get(project).GetAudioIOToken();
+
+   //If this project is playing, stop playing, make sure everything is unpaused.
+   if (gAudioIO->IsStreamActive(token)) {
+      toolbar.SetStop();         //Pushes stop down
+      projectAudioManager.Stop();
+      // Playing project was stopped.  All done.
+      return true;
+   }
+
+   // This project isn't playing.
+   // If some other project is playing, stop playing it
+   if (gAudioIO->IsStreamActive()) {
+
+      //find out which project we need;
+      auto start = AllProjects{}.begin(), finish = AllProjects{}.end(),
+         iter = std::find_if(start, finish,
+            [&](const AllProjects::value_type &ptr) {
+         return gAudioIO->IsStreamActive(
+            ProjectAudioIO::Get(*ptr).GetAudioIOToken()); });
+
+      //stop playing the other project
+      if (iter != finish) {
+         auto otherProject = *iter;
+         auto &otherToolbar = ControlToolBar::Get(*otherProject);
+         auto &otherProjectAudioManager =
+            ProjectAudioManager::Get(*otherProject);
+         otherToolbar.SetStop();         //Pushes stop down
+         otherProjectAudioManager.Stop();
+      }
+   }
+   return false;
+}
+
+void DoStartPlaying(const CommandContext &context, bool newDefault = false)
+{
+   auto &project = context.project;
+   auto &projectAudioManager = ProjectAudioManager::Get(project);
+   auto gAudioIO = AudioIOBase::Get();
+   //play the front project
+   if (!gAudioIO->IsBusy()) {
+      //Otherwise, start playing (assuming audio I/O isn't busy)
+
+      // Will automatically set mLastPlayMode
+      PlayCurrentRegionAndWait(context, newDefault);
+   }
 }
 
 void DoMoveToLabel(AudacityProject &project, bool next)
@@ -116,10 +287,10 @@ void DoMoveToLabel(AudacityProject &project, bool next)
          const LabelStruct* label = lt->GetLabel(i);
          bool newDefault = projectAudioManager.Looping();
          if (ProjectAudioIO::Get( project ).IsAudioActive()) {
-            TransportUtilities::DoStopPlaying(project);
+            DoStopPlaying(project);
             selectedRegion = label->selectedRegion;
             window.RedrawProject();
-            TransportUtilities::DoStartPlaying(project, newDefault);
+            DoStartPlaying(project, newDefault);
          }
          else {
             selectedRegion = label->selectedRegion;
@@ -166,9 +337,9 @@ struct Handler : CommandHandlerObject {
 // The default binding for Shift+SPACE.
 void OnPlayOnceOrStop(const CommandContext &context)
 {
-   if (TransportUtilities::DoStopPlaying(context.project))
+   if (DoStopPlaying(context.project))
       return;
-   TransportUtilities::DoStartPlaying(context.project);
+   DoStartPlaying(context.project);
 }
 
 void OnPlayStopSelect(const CommandContext &context)
@@ -181,7 +352,7 @@ void OnPlayStopSelect(const CommandContext &context)
 void OnPlayDefaultOrStop(const CommandContext &context)
 {
    auto &project = context.project;
-   if (TransportUtilities::DoStopPlaying(project))
+   if (DoStopPlaying(project))
       return;
 
    if( !MakeReadyToPlay(project) )
@@ -189,7 +360,7 @@ void OnPlayDefaultOrStop(const CommandContext &context)
 
    // Now play in a loop
    // Will automatically set mLastPlayMode
-   TransportUtilities::PlayCurrentRegionAndWait(context, true);
+   PlayCurrentRegionAndWait(context, true);
 }
 
 void OnPause(const CommandContext &context)
@@ -199,14 +370,14 @@ void OnPause(const CommandContext &context)
 
 void OnRecord(const CommandContext &context)
 {
-   TransportUtilities::RecordAndWait(context, false);
+   RecordAndWait(context, false);
 }
 
 // If first choice is record same track 2nd choice is record NEW track
 // and vice versa.
 void OnRecord2ndChoice(const CommandContext &context)
 {
-   TransportUtilities::RecordAndWait(context, true);
+   RecordAndWait(context, true);
 }
 
 void OnTimerRecord(const CommandContext &context)
@@ -610,8 +781,7 @@ void OnPlayOneSecond(const CommandContext &context)
    auto options = DefaultPlayOptions( project );
 
    double pos = trackPanel.GetMostRecentXPos();
-   TransportUtilities::PlayPlayRegionAndWait(
-      context, SelectedRegion(pos - 0.5, pos + 0.5),
+   PlayPlayRegionAndWait(context, SelectedRegion(pos - 0.5, pos + 0.5),
       options, PlayMode::oneSecondPlay);
 }
 
@@ -661,8 +831,7 @@ void OnPlayToSelection(const CommandContext &context)
 
    auto playOptions = DefaultPlayOptions( project );
 
-   TransportUtilities::PlayPlayRegionAndWait(
-      context, SelectedRegion(t0, t1),
+   PlayPlayRegionAndWait(context, SelectedRegion(t0, t1),
       playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -685,8 +854,7 @@ void OnPlayBeforeSelectionStart(const CommandContext &context)
 
    auto playOptions = DefaultPlayOptions( project );
 
-   TransportUtilities::PlayPlayRegionAndWait(
-      context, SelectedRegion(t0 - beforeLen, t0),
+   PlayPlayRegionAndWait(context, SelectedRegion(t0 - beforeLen, t0),
       playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -708,12 +876,10 @@ void OnPlayAfterSelectionStart(const CommandContext &context)
    auto playOptions = DefaultPlayOptions( project );
 
    if ( t1 - t0 > 0.0 && t1 - t0 < afterLen )
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0, t1),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0, t1),
          playOptions, PlayMode::oneSecondPlay);
    else
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0, t0 + afterLen),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0, t0 + afterLen),
          playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -735,12 +901,10 @@ void OnPlayBeforeSelectionEnd(const CommandContext &context)
    auto playOptions = DefaultPlayOptions( project );
 
    if ( t1 - t0 > 0.0 && t1 - t0 < beforeLen )
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0, t1),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0, t1),
          playOptions, PlayMode::oneSecondPlay);
    else
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t1 - beforeLen, t1),
+      PlayPlayRegionAndWait(context, SelectedRegion(t1 - beforeLen, t1),
          playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -760,8 +924,7 @@ void OnPlayAfterSelectionEnd(const CommandContext &context)
 
    auto playOptions = DefaultPlayOptions( project );
 
-   TransportUtilities::PlayPlayRegionAndWait(
-      context, SelectedRegion(t1, t1 + afterLen),
+   PlayPlayRegionAndWait(context, SelectedRegion(t1, t1 + afterLen),
       playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -786,12 +949,10 @@ void OnPlayBeforeAndAfterSelectionStart
    auto playOptions = DefaultPlayOptions( project );
 
    if ( t1 - t0 > 0.0 && t1 - t0 < afterLen )
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0 - beforeLen, t1),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0 - beforeLen, t1),
          playOptions, PlayMode::oneSecondPlay);
    else
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0 - beforeLen, t0 + afterLen),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0 - beforeLen, t0 + afterLen),
          playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -816,12 +977,10 @@ void OnPlayBeforeAndAfterSelectionEnd
    auto playOptions = DefaultPlayOptions( project );
 
    if ( t1 - t0 > 0.0 && t1 - t0 < beforeLen )
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t0, t1 + afterLen),
+      PlayPlayRegionAndWait(context, SelectedRegion(t0, t1 + afterLen),
          playOptions, PlayMode::oneSecondPlay);
    else
-      TransportUtilities::PlayPlayRegionAndWait(
-         context, SelectedRegion(t1 - beforeLen, t1 + afterLen),
+      PlayPlayRegionAndWait(context, SelectedRegion(t1 - beforeLen, t1 + afterLen),
          playOptions, PlayMode::oneSecondPlay);
 }
 
@@ -833,7 +992,7 @@ void OnPlayCutPreview(const CommandContext &context)
       return;
 
    // Play with cut preview
-   TransportUtilities::PlayCurrentRegionAndWait(context, false, true);
+   PlayCurrentRegionAndWait(context, false, true);
 }
 
 void OnPlayAtSpeed(const CommandContext &context)

@@ -12,11 +12,6 @@ Paul Licameli split from WaveTrackView.cpp
 #include "SpectrumView.h"
 
 #include "SpectralDataManager.h" // Cycle :-(
-#include "SpectrumCache.h"
-
-#include "Sequence.h"
-#include "Spectrum.h"
-
 #include "SpectrumVRulerControls.h"
 #include "WaveTrackView.h"
 #include "WaveTrackViewConstants.h"
@@ -26,7 +21,6 @@ Paul Licameli split from WaveTrackView.cpp
 #include "AColor.h"
 #include "Prefs.h"
 #include "NumberScale.h"
-#include "../../../../TrackArt.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelDrawingContext.h"
 #include "ViewInfo.h"
@@ -34,7 +28,6 @@ Paul Licameli split from WaveTrackView.cpp
 #include "../../../../WaveTrack.h"
 #include "../../../../prefs/SpectrogramSettings.h"
 #include "../../../../ProjectSettings.h"
-#include "SampleTrackCache.h"
 
 #include <wx/dcmemory.h>
 #include <wx/graphics.h>
@@ -313,8 +306,9 @@ ChooseColorSet( float bin0, float bin1, float selBinLo,
    return  AColor::ColorGradientTimeSelected;
 }
 
+
 void DrawClipSpectrum(TrackPanelDrawingContext &context,
-                                   SampleTrackCache &waveTrackCache,
+                                   WaveTrackCache &waveTrackCache,
                                    const WaveClip *clip,
                                    const wxRect &rect,
                                    const std::shared_ptr<SpectralData> &mpSpectralData,
@@ -339,15 +333,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
       return;
    }
 
-   const auto track =
-      dynamic_cast<const WaveTrack*>(waveTrackCache.GetTrack().get());
-   if (!track)
-      // Leave a blank rectangle.
-      // TODO: rewrite GetSpectrogramSettings and GetSpectrumBounds so they
-      // are not members of WaveTrack, but fetch UI related ClientData
-      // attachments; then this downcast from SampleTrack will not be needed.
-      return;
-
+   const WaveTrack *const track = waveTrackCache.GetTrack().get();
    const SpectrogramSettings &settings = track->GetSpectrogramSettings();
    const bool autocorrelation = (settings.algorithm == SpectrogramSettings::algPitchEAC);
 
@@ -415,9 +401,8 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
    bool updated;
    {
       const double pps = averagePixelsPerSample * rate;
-      updated = WaveClipSpectrumCache::Get( *clip ).GetSpectrogram( *clip,
-         waveTrackCache, freq, where,
-         (size_t)hiddenMid.width,
+      updated = clip->GetSpectrogram(waveTrackCache, freq, where,
+                                     (size_t)hiddenMid.width,
          t0, pps);
    }
    auto nBins = settings.NBins();
@@ -467,14 +452,13 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
    }
 #endif //EXPERIMENTAL_FFT_Y_GRID
 
-   auto &clipCache = WaveClipSpectrumCache::Get( *clip );
-   if (!updated && clipCache.mSpecPxCache->valid &&
-      ((int)clipCache.mSpecPxCache->len == hiddenMid.height * hiddenMid.width)
-      && scaleType == clipCache.mSpecPxCache->scaleType
-      && gain == clipCache.mSpecPxCache->gain
-      && range == clipCache.mSpecPxCache->range
-      && minFreq == clipCache.mSpecPxCache->minFreq
-      && maxFreq == clipCache.mSpecPxCache->maxFreq
+   if (!updated && clip->mSpecPxCache->valid &&
+      ((int)clip->mSpecPxCache->len == hiddenMid.height * hiddenMid.width)
+      && scaleType == clip->mSpecPxCache->scaleType
+      && gain == clip->mSpecPxCache->gain
+      && range == clip->mSpecPxCache->range
+      && minFreq == clip->mSpecPxCache->minFreq
+      && maxFreq == clip->mSpecPxCache->maxFreq
 #ifdef EXPERIMENTAL_FFT_Y_GRID
    && fftYGrid==fftYGridOld
 #endif //EXPERIMENTAL_FFT_Y_GRID
@@ -490,13 +474,13 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
    }
    else {
       // Update the spectrum pixel cache
-      clipCache.mSpecPxCache = std::make_unique<SpecPxCache>(hiddenMid.width * hiddenMid.height);
-      clipCache.mSpecPxCache->valid = true;
-      clipCache.mSpecPxCache->scaleType = scaleType;
-      clipCache.mSpecPxCache->gain = gain;
-      clipCache.mSpecPxCache->range = range;
-      clipCache.mSpecPxCache->minFreq = minFreq;
-      clipCache.mSpecPxCache->maxFreq = maxFreq;
+      clip->mSpecPxCache = std::make_unique<SpecPxCache>(hiddenMid.width * hiddenMid.height);
+      clip->mSpecPxCache->valid = true;
+      clip->mSpecPxCache->scaleType = scaleType;
+      clip->mSpecPxCache->gain = gain;
+      clip->mSpecPxCache->range = range;
+      clip->mSpecPxCache->minFreq = minFreq;
+      clip->mSpecPxCache->maxFreq = maxFreq;
 #ifdef EXPERIMENTAL_FIND_NOTES
       artist->fftFindNotesOld = fftFindNotes;
       artist->findNotesMinAOld = findNotesMinA;
@@ -602,7 +586,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
             if (settings.scaleType != SpectrogramSettings::stLogarithmic) {
                const float value = findValue
                   (freq + nBins * xx, bin, nextBin, nBins, autocorrelation, gain, range);
-               clipCache.mSpecPxCache->values[xx * hiddenMid.height + yy] = value;
+               clip->mSpecPxCache->values[xx * hiddenMid.height + yy] = value;
             }
             else {
                float value;
@@ -640,7 +624,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
                   value = findValue
                      (freq + nBins * xx, bin, nextBin, nBins, autocorrelation, gain, range);
                }
-               clipCache.mSpecPxCache->values[xx * hiddenMid.height + yy] = value;
+               clip->mSpecPxCache->values[xx * hiddenMid.height + yy] = value;
             } // logF
          } // each yy
       } // each xx
@@ -806,7 +790,7 @@ void DrawClipSpectrum(TrackPanelDrawingContext &context,
 
          const float value = uncached
             ? findValue(uncached, bin, nextBin, nBins, autocorrelation, gain, range)
-            : clipCache.mSpecPxCache->values[correctedX * hiddenMid.height + yy];
+            : clip->mSpecPxCache->values[correctedX * hiddenMid.height + yy];
 
          unsigned char rv, gv, bv;
          GetColorGradient(value, selected, colorScheme, &rv, &gv, &bv);
@@ -860,7 +844,7 @@ void SpectrumView::DoDraw(TrackPanelDrawingContext& context,
    TrackArt::DrawBackgroundWithSelection(
       context, rect, track, blankSelectedBrush, blankBrush );
 
-   SampleTrackCache cache(track->SharedPointer<const WaveTrack>());
+   WaveTrackCache cache(track->SharedPointer<const WaveTrack>());
    for (const auto &clip: track->GetClips()){
       DrawClipSpectrum( context, cache, clip.get(), rect,
                         mpSpectralData, clip.get() == selectedClip);
@@ -918,7 +902,7 @@ static const WaveTrackSubViews::RegisteredFactory key{
 #include "WaveTrackControls.h"
 #include "AudioIOBase.h"
 #include "../../../../Menus.h"
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
 #include "../../../../prefs/PrefsDialog.h"
 #include "../../../../prefs/SpectrumPrefs.h"

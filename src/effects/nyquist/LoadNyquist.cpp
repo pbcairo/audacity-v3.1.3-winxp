@@ -17,8 +17,8 @@
 #include "Nyquist.h"
 
 #include "FileNames.h"
-#include "PluginManager.h"
-#include "ModuleManager.h"
+#include "../../PluginManager.h"
+#include "../../ModuleManager.h"
 
 // ============================================================================
 // List of effects that ship with Audacity.  These will be autoregistered.
@@ -63,17 +63,17 @@ const static wxChar *kShippedEffects[] =
 // When the module is builtin to Audacity, we use the same function, but it is
 // declared static so as not to clash with other builtin modules.
 // ============================================================================
-DECLARE_PROVIDER_ENTRY(AudacityModule)
+DECLARE_MODULE_ENTRY(AudacityModule)
 {
    // Create and register the importer
    // Trust the module manager not to leak this
-   return std::make_unique<NyquistEffectsModule>();
+   return safenew NyquistEffectsModule();
 }
 
 // ============================================================================
 // Register this as a builtin module
 // ============================================================================
-DECLARE_BUILTIN_PROVIDER(NyquistsEffectBuiltin);
+DECLARE_BUILTIN_MODULE(NyquistsEffectBuiltin);
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -93,34 +93,34 @@ NyquistEffectsModule::~NyquistEffectsModule()
 // ComponentInterface implementation
 // ============================================================================
 
-PluginPath NyquistEffectsModule::GetPath() const
+PluginPath NyquistEffectsModule::GetPath()
 {
    return {};
 }
 
-ComponentInterfaceSymbol NyquistEffectsModule::GetSymbol() const
+ComponentInterfaceSymbol NyquistEffectsModule::GetSymbol()
 {
    return XO("Nyquist Effects");
 }
 
-VendorSymbol NyquistEffectsModule::GetVendor() const
+VendorSymbol NyquistEffectsModule::GetVendor()
 {
    return XO("The Audacity Team");
 }
 
-wxString NyquistEffectsModule::GetVersion() const
+wxString NyquistEffectsModule::GetVersion()
 {
    // This "may" be different if this were to be maintained as a separate DLL
    return NYQUISTEFFECTS_VERSION;
 }
 
-TranslatableString NyquistEffectsModule::GetDescription() const
+TranslatableString NyquistEffectsModule::GetDescription()
 {
    return XO("Provides Nyquist Effects support to Audacity");
 }
 
 // ============================================================================
-// PluginProvider implementation
+// ModuleInterface implementation
 // ============================================================================
 
 bool NyquistEffectsModule::Initialize()
@@ -172,7 +172,7 @@ FilePath NyquistEffectsModule::InstallPath()
    return FileNames::PlugInDir();
 }
 
-void NyquistEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
+bool NyquistEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
 {
    // Autoregister effects that we "think" are ones that have been shipped with
    // Audacity.  A little simplistic, but it should suffice for now.
@@ -215,9 +215,12 @@ void NyquistEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
          }
       }
    }
+
+   // We still want to be called during the normal registration process
+   return false;
 }
 
-PluginPaths NyquistEffectsModule::FindModulePaths(PluginManagerInterface & pm)
+PluginPaths NyquistEffectsModule::FindPluginPaths(PluginManagerInterface & pm)
 {
    auto pathList = NyquistEffect::GetNyquistSearchPath();
    FilePaths files;
@@ -250,22 +253,25 @@ unsigned NyquistEffectsModule::DiscoverPluginsAtPath(
    return 0;
 }
 
+bool NyquistEffectsModule::IsPluginValid(const PluginPath & path, bool bFast)
+{
+   // Ignores bFast parameter, since checking file exists is fast enough for
+   // the small number of Nyquist plug-ins that we have.
+   static_cast<void>(bFast);
+   if(path == NYQUIST_PROMPT_ID)
+      return true;
+
+   return wxFileName::FileExists(path);
+}
+
 std::unique_ptr<ComponentInterface>
-NyquistEffectsModule::LoadPlugin(const PluginPath & path)
+NyquistEffectsModule::CreateInstance(const PluginPath & path)
 {
    // Acquires a resource for the application.
    auto effect = std::make_unique<NyquistEffect>(path);
    if (effect->IsOk())
       return effect;
    return nullptr;
-}
-
-bool NyquistEffectsModule::CheckPluginExist(const PluginPath& path) const
-{
-   if(path == NYQUIST_PROMPT_ID)
-      return true;
-
-   return wxFileName::FileExists(path);
 }
 
 // ============================================================================

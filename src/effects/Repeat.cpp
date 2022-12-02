@@ -30,21 +30,18 @@
 #include <wx/stattext.h>
 
 #include "../LabelTrack.h"
+#include "../Shuttle.h"
 #include "../ShuttleGui.h"
-#include "../SyncLock.h"
 #include "../WaveTrack.h"
 #include "../widgets/NumericTextCtrl.h"
 #include "../widgets/valnum.h"
 
 #include "LoadEffects.h"
 
-const EffectParameterMethods& EffectRepeat::Parameters() const
-{
-   static CapturedParameters<EffectRepeat,
-      Count
-   > parameters;
-   return parameters;
-}
+// Define keys, defaults, minimums, and maximums for the effect parameters
+//
+//     Name    Type  Key             Def  Min   Max      Scale
+Param( Count,  int,  wxT("Count"),    1,  1,    INT_MAX, 1  );
 
 const ComponentInterfaceSymbol EffectRepeat::Symbol
 { XO("Repeat") };
@@ -57,7 +54,8 @@ END_EVENT_TABLE()
 
 EffectRepeat::EffectRepeat()
 {
-   Parameters().Reset(*this);
+   repeatCount = DEF_Count;
+
    SetLinearEffectFlag(true);
 }
 
@@ -67,31 +65,53 @@ EffectRepeat::~EffectRepeat()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectRepeat::GetSymbol() const
+ComponentInterfaceSymbol EffectRepeat::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectRepeat::GetDescription() const
+TranslatableString EffectRepeat::GetDescription()
 {
    return XO("Repeats the selection the specified number of times");
 }
 
-ManualPageID EffectRepeat::ManualPage() const
+ManualPageID EffectRepeat::ManualPage()
 {
    return L"Repeat";
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectRepeat::GetType() const
+EffectType EffectRepeat::GetType()
 {
    return EffectTypeProcess;
 }
 
+// EffectClientInterface implementation
+bool EffectRepeat::DefineParams( ShuttleParams & S ){
+   S.SHUTTLE_PARAM( repeatCount, Count );
+   return true;
+}
+
+bool EffectRepeat::GetAutomationParameters(CommandParameters & parms)
+{
+   parms.Write(KEY_Count, repeatCount);
+
+   return true;
+}
+
+bool EffectRepeat::SetAutomationParameters(CommandParameters & parms)
+{
+   ReadAndVerifyInt(Count);
+
+   repeatCount = Count;
+
+   return true;
+}
+
 // Effect implementation
 
-bool EffectRepeat::Process(EffectInstance &, EffectSettings &)
+bool EffectRepeat::Process()
 {
    // Set up mOutputTracks.
    // This effect needs all for sync-lock grouping.
@@ -104,7 +124,7 @@ bool EffectRepeat::Process(EffectInstance &, EffectSettings &)
    mOutputTracks->Any().VisitWhile( bGoodResult,
       [&](LabelTrack *track)
       {
-         if (SyncLock::IsSelectedOrSyncLockSelected(track))
+         if (track->GetSelected() || track->IsSyncLockSelected())
          {
             if (!track->Repeat(mT0, mT1, repeatCount))
                bGoodResult = false;
@@ -140,7 +160,7 @@ bool EffectRepeat::Process(EffectInstance &, EffectSettings &)
       },
       [&](Track *t)
       {
-         if( SyncLock::IsSyncLockSelected(t) )
+         if( t->IsSyncLockSelected() )
             t->SyncLockAdjust(mT1, mT1 + (mT1 - mT0) * repeatCount);
       }
    );
@@ -155,16 +175,15 @@ bool EffectRepeat::Process(EffectInstance &, EffectSettings &)
    return bGoodResult;
 }
 
-std::unique_ptr<EffectUIValidator> EffectRepeat::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &,
-   const EffectOutputs *)
+void EffectRepeat::PopulateOrExchange(ShuttleGui & S)
 {
    S.StartHorizontalLay(wxCENTER, false);
    {
       mRepeatCount = S.Validator<IntegerValidator<int>>(
             &repeatCount, NumValidatorStyle::DEFAULT,
-            Count.min, 2147483647 / mProjectRate )
-         .AddTextBox(XXO("&Number of repeats to add:"), L"", 12);
+            MIN_Count, 2147483647 / mProjectRate
+         )
+         .AddTextBox(XXO("&Number of repeats to add:"), wxT(""), 12);
    }
    S.EndHorizontalLay();
 
@@ -175,10 +194,9 @@ std::unique_ptr<EffectUIValidator> EffectRepeat::PopulateOrExchange(
       mTotalTime = S.AddVariableText(XO("New selection length: dd:hh:mm:ss"));
    }
    S.EndMultiColumn();
-   return nullptr;
 }
 
-bool EffectRepeat::TransferDataToWindow(const EffectSettings &)
+bool EffectRepeat::TransferDataToWindow()
 {
    mRepeatCount->ChangeValue(wxString::Format(wxT("%d"), repeatCount));
 
@@ -187,7 +205,7 @@ bool EffectRepeat::TransferDataToWindow(const EffectSettings &)
    return true;
 }
 
-bool EffectRepeat::TransferDataFromWindow(EffectSettings &)
+bool EffectRepeat::TransferDataFromWindow()
 {
    if (!mUIParent->Validate())
    {

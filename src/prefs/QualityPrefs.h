@@ -30,8 +30,8 @@ class AUDACITY_DLL_API QualityPrefs final : public PrefsPanel
  public:
    QualityPrefs(wxWindow * parent, wxWindowID winid);
    virtual ~QualityPrefs();
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    bool Commit() override;
    ManualPageID HelpPageName() override;

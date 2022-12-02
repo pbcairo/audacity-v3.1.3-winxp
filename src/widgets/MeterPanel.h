@@ -16,21 +16,17 @@
 #ifndef __AUDACITY_METER_PANEL__
 #define __AUDACITY_METER_PANEL__
 
-#include <atomic>
 #include <wx/setup.h> // for wxUSE_* macros
 #include <wx/brush.h> // member variable
 #include <wx/defs.h>
 #include <wx/timer.h> // member variable
 
-#include "ASlider.h"
 #include "SampleFormat.h"
 #include "Prefs.h"
 #include "MeterPanelBase.h" // to inherit
-#include "Observer.h"
 #include "Ruler.h" // member variable
 
 class AudacityProject;
-struct AudioIOEvent;
 
 // Increase this when we add support for multichannel meters
 // (most of the code is already there)
@@ -84,11 +80,9 @@ class MeterUpdateQueue
    void Clear();
 
  private:
-   // Align the two atomics to avoid false sharing
-   // mStart is written only by the reader, mEnd by the writer
-   NonInterfering< std::atomic<size_t> > mStart{ 0 }, mEnd{ 0 };
-
-   const size_t mBufferSize;
+   int              mStart;
+   int              mEnd;
+   size_t           mBufferSize;
    ArrayOf<MeterUpdateMsg> mBuffer{mBufferSize};
 };
 
@@ -100,7 +94,6 @@ or playback.
 ************************************************************************/
 class AUDACITY_DLL_API MeterPanel final
    : public MeterPanelBase, private PrefsListener
-   , public NonInterferingBase
 {
    DECLARE_DYNAMIC_CLASS(MeterPanel)
 
@@ -180,10 +173,6 @@ class AUDACITY_DLL_API MeterPanel final
    bool IsMeterDisabled() const override;
 
    float GetMaxPeak() const override;
-   float GetPeakHold() const;
-
-   bool IsMonitoring() const;
-   bool IsActive() const;
 
    bool IsClipping() const override;
 
@@ -194,18 +183,8 @@ class AUDACITY_DLL_API MeterPanel final
    struct State{ bool mSaved, mMonitoring, mActive; };
    State SaveState();
    void RestoreState(const State &state);
-   void SetMixer(wxCommandEvent& event);
 
    int GetDBRange() const override { return mDB ? mDBRange : -1; }
-
-   bool ShowDialog();
-   void Increase(float steps);
-   void Decrease(float steps);
-   void UpdateSliderControl();
-   
-   void ShowMenu(const wxPoint & pos);
-
-   void SetName(const TranslatableString& name);
 
  private:
    void UpdatePrefs() override;
@@ -218,18 +197,17 @@ class AUDACITY_DLL_API MeterPanel final
    void OnErase(wxEraseEvent &evt);
    void OnPaint(wxPaintEvent &evt);
    void OnSize(wxSizeEvent &evt);
+   bool InIcon(wxMouseEvent *pEvent = nullptr) const;
    void OnMouse(wxMouseEvent &evt);
    void OnKeyDown(wxKeyEvent &evt);
-   void OnCharHook(wxKeyEvent &evt);
+   void OnKeyUp(wxKeyEvent &evt);
    void OnContext(wxContextMenuEvent &evt);
    void OnSetFocus(wxFocusEvent &evt);
    void OnKillFocus(wxFocusEvent &evt);
 
-   void OnAudioIOStatus(AudioIOEvent);
-   void OnAudioCapture(AudioIOEvent);
+   void OnAudioIOStatus(wxCommandEvent &evt);
 
    void OnMeterUpdate(wxTimerEvent &evt);
-   void OnTipTimeout(wxTimerEvent& evt);
 
    void HandleLayout(wxDC &dc);
    void SetActiveStyle(Style style);
@@ -242,18 +220,15 @@ class AUDACITY_DLL_API MeterPanel final
    //
    // Pop-up menu
    //
+   void ShowMenu(const wxPoint & pos);
    void OnMonitor(wxCommandEvent &evt);
    void OnPreferences(wxCommandEvent &evt);
 
    wxString Key(const wxString & key) const;
 
-   Observer::Subscription mAudioIOStatusSubscription;
-   Observer::Subscription mAudioCaptureSubscription;
-
    AudacityProject *mProject;
    MeterUpdateQueue mQueue;
    wxTimer          mTimer;
-   wxTimer          mTipTimer;
 
    int       mWidth;
    int       mHeight;
@@ -288,10 +263,12 @@ class AUDACITY_DLL_API MeterPanel final
    bool      mLayoutValid;
 
    std::unique_ptr<wxBitmap> mBitmap;
+   wxRect    mIconRect;
    wxPoint   mLeftTextPos;
    wxPoint   mRightTextPos;
    wxSize    mLeftSize;
    wxSize    mRightSize;
+   std::unique_ptr<wxBitmap> mIcon;
    wxPen     mPen;
    wxPen     mDisabledPen;
    wxPen     mPeakPeakPen;
@@ -304,16 +281,17 @@ class AUDACITY_DLL_API MeterPanel final
    wxString  mLeftText;
    wxString  mRightText;
 
-   std::unique_ptr<LWSlider> mSlider;
-   wxPoint mSliderPos;
-   wxSize mSliderSize;
-
-   bool mEnabled{ true };
-
    bool mIsFocused;
    wxRect mFocusRect;
+#if defined(__WXMSW__)
+   bool mHadKeyDown;
+#endif
+
+   bool mAccSilent;
 
    friend class MeterAx;
+
+   bool mHighlighted {};
 
    DECLARE_EVENT_TABLE()
 };

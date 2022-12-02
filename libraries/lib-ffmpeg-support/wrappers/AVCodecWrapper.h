@@ -26,8 +26,9 @@ public:
    AVCodecWrapper(AVCodecWrapper&&) = delete;
    AVCodecWrapper& operator=(AVCodecWrapper&&) = delete;
 
-   explicit AVCodecWrapper(const AVCodec* wrapped) noexcept;
+   explicit AVCodecWrapper(AVCodec* wrapped) noexcept;
 
+   AVCodec* GetWrappedValue() noexcept;
    const AVCodec* GetWrappedValue() const noexcept;
 
    virtual ~AVCodecWrapper() = default;
@@ -47,5 +48,5 @@ public:
    virtual bool IsAudio() const noexcept = 0;
 
 protected:
-   const AVCodec* mAVCodec { nullptr };
+   AVCodec* mAVCodec { nullptr };
 };

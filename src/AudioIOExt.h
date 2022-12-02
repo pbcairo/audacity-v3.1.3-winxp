@@ -42,7 +42,7 @@ public:
    virtual ~AudioIOExt();
 
    // Formerly in AudioIoCallback
-   virtual void ComputeOtherTimings(double rate, bool paused,
+   virtual void ComputeOtherTimings(double rate,
       const PaStreamCallbackTimeInfo *timeInfo,
       unsigned long framesPerBuffer) = 0;
    virtual void SignalOtherCompletion() = 0;

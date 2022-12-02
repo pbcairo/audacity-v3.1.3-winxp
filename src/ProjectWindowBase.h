@@ -12,7 +12,6 @@ Paul Licameli split from ProjectWindow.h
 #define __AUDACITY_PROJECT_WINDOW_BASE__
 
 #include <wx/frame.h> // to inherit
-#include <memory>
 
 class AudacityProject;
 
@@ -27,13 +26,11 @@ public:
 
    ~ProjectWindowBase() override;
 
-   std::shared_ptr<AudacityProject> FindProject()
-      { return mwProject.lock(); }
-   std::shared_ptr<const AudacityProject> FindProject() const
-      { return mwProject.lock(); }
+   AudacityProject &GetProject() { return mProject; }
+   const AudacityProject &GetProject() const { return mProject; }
 
 protected:
-   std::weak_ptr<AudacityProject> mwProject;
+   AudacityProject &mProject;
 };
 
 AUDACITY_DLL_API AudacityProject *FindProjectFromWindow( wxWindow *pWindow );

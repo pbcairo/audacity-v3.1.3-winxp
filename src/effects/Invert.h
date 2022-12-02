@@ -13,9 +13,9 @@
 #ifndef __AUDACITY_EFFECT_INVERT__
 #define __AUDACITY_EFFECT_INVERT__
 
-#include "StatefulPerTrackEffect.h"
+#include "Effect.h"
 
-class EffectInvert final : public StatefulPerTrackEffect
+class EffectInvert final : public Effect
 {
 public:
    static const ComponentInterfaceSymbol Symbol;
@@ -25,19 +25,19 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   bool IsInteractive() const override;
+   EffectType GetType() override;
+   bool IsInteractive() override;
 
-   unsigned GetAudioInCount() const override;
-   unsigned GetAudioOutCount() const override;
-   size_t ProcessBlock(EffectSettings &settings,
-      const float *const *inBlock, float *const *outBlock, size_t blockLen)
-      override;
+   // EffectClientInterface implementation
+
+   unsigned GetAudioInCount() override;
+   unsigned GetAudioOutCount() override;
+   size_t ProcessBlock(float **inBlock, float **outBlock, size_t blockLen) override;
 };
 
 #endif

@@ -23,10 +23,12 @@
 #include <wx/intl.h>
 #include "widgets/Ruler.h"
 #include "Envelope.h"
-#include "Mix.h"
 #include "Project.h"
 #include "ProjectRate.h"
 #include "ViewInfo.h"
+
+#include "tracks/ui/TrackView.h"
+#include "tracks/ui/TrackControls.h"
 
 
 //TODO-MB: are these sensible values?
@@ -35,22 +37,15 @@
 
 static ProjectFileIORegistry::ObjectReaderEntry readerEntry{
    "timetrack",
-   TimeTrack::New
+   []( AudacityProject &project ){
+      auto &tracks = TrackList::Get( project );
+      auto &viewInfo = ViewInfo::Get( project );
+      auto result = tracks.Add(std::make_shared<TimeTrack>(&viewInfo));
+      TrackView::Get( *result );
+      TrackControls::Get( *result );
+      return result;
+   }
 };
-
-wxString TimeTrack::GetDefaultName()
-{
-   return _("Time Track");
-}
-
-TimeTrack *TimeTrack::New( AudacityProject &project )
-{
-   auto &tracks = TrackList::Get( project );
-   auto &viewInfo = ViewInfo::Get( project );
-   auto result = tracks.Add(std::make_shared<TimeTrack>(&viewInfo));
-   result->AttachedTrackObjects::BuildAll();
-   return result;
-}
 
 TimeTrack::TimeTrack(const ZoomInfo *zoomInfo):
    Track()
@@ -70,7 +65,7 @@ void TimeTrack::CleanState()
    mEnvelope->SetTrackLen(DBL_MAX);
    mEnvelope->SetOffset(0);
 
-   //Time track is always unique
+   SetDefaultName(_("Time Track"));
    SetName(GetDefaultName());
 
    mRuler = std::make_unique<Ruler>();
@@ -79,9 +74,8 @@ void TimeTrack::CleanState()
    mRuler->SetFormat(Ruler::TimeFormat);
 }
 
-TimeTrack::TimeTrack(const TimeTrack &orig, ProtectedCreationArg &&a,
-   double *pT0, double *pT1
-)  : Track(orig, std::move(a))
+TimeTrack::TimeTrack(const TimeTrack &orig, double *pT0, double *pT1)
+   : Track(orig)
    , mZoomInfo(orig.mZoomInfo)
 {
    Init(orig);	// this copies the TimeTrack metadata (name, range, etc)
@@ -111,6 +105,7 @@ TimeTrack::TimeTrack(const TimeTrack &orig, ProtectedCreationArg &&a,
 void TimeTrack::Init(const TimeTrack &orig)
 {
    Track::Init(orig);
+   SetDefaultName(orig.GetDefaultName());
    SetName(orig.GetName());
    SetDisplayLog(orig.GetDisplayLog());
 }
@@ -137,23 +132,6 @@ void TimeTrack::SetRangeLower(double lower)
 void TimeTrack::SetRangeUpper(double upper)
 {
    mEnvelope->SetRangeUpper( upper );
-}
-
-static const Track::TypeInfo &typeInfo()
-{
-   static const Track::TypeInfo info{
-      { "time", "time", XO("Time Track") }, true, &Track::ClassTypeInfo() };
-   return info;
-}
-
-auto TimeTrack::GetTypeInfo() const -> const TypeInfo &
-{
-   return typeInfo();
-}
-
-auto TimeTrack::ClassTypeInfo() -> const TypeInfo &
-{
-   return typeInfo();
 }
 
 bool TimeTrack::SupportsBasicEditing() const
@@ -190,9 +168,7 @@ Track::Holder TimeTrack::Cut( double t0, double t1 )
 
 Track::Holder TimeTrack::Copy( double t0, double t1, bool ) const
 {
-   auto result = std::make_shared<TimeTrack>(*this, ProtectedCreationArg{}, &t0, &t1);
-   result->Init(*this);
-   return result;
+   return std::make_shared<TimeTrack>( *this, &t0, &t1 );
 }
 
 namespace {
@@ -235,9 +211,7 @@ void TimeTrack::InsertSilence(double t, double len)
 
 Track::Holder TimeTrack::Clone() const
 {
-   auto result = std::make_shared<TimeTrack>(*this, ProtectedCreationArg{});
-   result->Init(*this);
-   return result;
+   return std::make_shared<TimeTrack>(*this);
 }
 
 bool TimeTrack::GetInterpolateLog() const
@@ -362,12 +336,3 @@ void TimeTrack::testMe()
      }*/
 }
 
-//! Installer of the time warper
-static Mixer::WarpOptions::DefaultWarp::Scope installer{
-[](const TrackList &list) -> const BoundedEnvelope*
-{
-   if (auto pTimeTrack = *list.Any<const TimeTrack>().begin())
-      return pTimeTrack->GetEnvelope();
-   else
-      return nullptr;
-} };

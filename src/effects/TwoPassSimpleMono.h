@@ -17,13 +17,12 @@
 
 class WaveTrack;
 
-class AUDACITY_DLL_API EffectTwoPassSimpleMono /* not final */
-   : public StatefulEffect
+class AUDACITY_DLL_API EffectTwoPassSimpleMono /* not final */ : public Effect
 {
 public:
    // Effect implementation
 
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
+   bool Process() override;
 
 protected:
    // EffectTwoPassSimpleMono implementation
@@ -31,8 +30,8 @@ protected:
    // Override these methods if you need to initialize something
    // before each pass. Return None if processing should stop.
    // These should not depend on mOutputTracks having been set up via CopyInputTracks().
-   virtual bool InitPass1();
-   virtual bool InitPass2();
+   bool InitPass1() override;
+   bool InitPass2() override;
 
    // NEW virtuals
 
@@ -82,7 +81,7 @@ protected:
 private:
    bool ProcessOne(WaveTrack * t, WaveTrack * outTrack,
                    sampleCount start, sampleCount end);
-   bool ProcessPass(EffectSettings &settings);
+   bool ProcessPass() override;
 };
 
 #endif

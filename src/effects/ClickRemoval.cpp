@@ -35,6 +35,7 @@
 #include <wx/valgen.h>
 
 #include "Prefs.h"
+#include "../Shuttle.h"
 #include "../ShuttleGui.h"
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/valnum.h"
@@ -47,13 +48,11 @@ enum
    ID_Width
 };
 
-const EffectParameterMethods& EffectClickRemoval::Parameters() const
-{
-   static CapturedParameters<EffectClickRemoval,
-      Threshold, Width
-   > parameters;
-   return parameters;
-}
+// Define keys, defaults, minimums, and maximums for the effect parameters
+//
+//     Name       Type     Key               Def      Min      Max      Scale
+Param( Threshold, int,     wxT("Threshold"),  200,     0,       900,     1  );
+Param( Width,     int,     wxT("Width"),      20,      0,       40,      1  );
 
 const ComponentInterfaceSymbol EffectClickRemoval::Symbol
 { XO("Click Removal") };
@@ -69,7 +68,8 @@ END_EVENT_TABLE()
 
 EffectClickRemoval::EffectClickRemoval()
 {
-   Parameters().Reset(*this);
+   mThresholdLevel = DEF_Threshold;
+   mClickWidth = DEF_Width;
 
    SetLinearEffectFlag(false);
 
@@ -83,36 +83,98 @@ EffectClickRemoval::~EffectClickRemoval()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectClickRemoval::GetSymbol() const
+ComponentInterfaceSymbol EffectClickRemoval::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectClickRemoval::GetDescription() const
+TranslatableString EffectClickRemoval::GetDescription()
 {
    return XO("Click Removal is designed to remove clicks on audio tracks");
 }
 
-ManualPageID EffectClickRemoval::ManualPage() const
+ManualPageID EffectClickRemoval::ManualPage()
 {
    return L"Click_Removal";
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectClickRemoval::GetType() const
+EffectType EffectClickRemoval::GetType()
 {
    return EffectTypeProcess;
 }
 
+// EffectClientInterface implementation
+bool EffectClickRemoval::DefineParams( ShuttleParams & S ){
+   S.SHUTTLE_PARAM( mThresholdLevel, Threshold );
+   S.SHUTTLE_PARAM( mClickWidth, Width );
+   return true;
+}
+
+bool EffectClickRemoval::GetAutomationParameters(CommandParameters & parms)
+{
+   parms.Write(KEY_Threshold, mThresholdLevel);
+   parms.Write(KEY_Width, mClickWidth);
+
+   return true;
+}
+
+bool EffectClickRemoval::SetAutomationParameters(CommandParameters & parms)
+{
+   ReadAndVerifyInt(Threshold);
+   ReadAndVerifyInt(Width);
+
+   mThresholdLevel = Threshold;
+   mClickWidth = Width;
+
+   return true;
+}
+
 // Effect implementation
 
-bool EffectClickRemoval::CheckWhetherSkipEffect(const EffectSettings &) const
+bool EffectClickRemoval::CheckWhetherSkipEffect()
 {
    return ((mClickWidth == 0) || (mThresholdLevel == 0));
 }
 
-bool EffectClickRemoval::Process(EffectInstance &, EffectSettings &)
+bool EffectClickRemoval::Startup()
+{
+   wxString base = wxT("/Effects/ClickRemoval/");
+
+   // Migrate settings from 2.1.0 or before
+
+   // Already migrated, so bail
+   if (gPrefs->Exists(base + wxT("Migrated")))
+   {
+      return true;
+   }
+
+   // Load the old "current" settings
+   if (gPrefs->Exists(base))
+   {
+      mThresholdLevel = gPrefs->Read(base + wxT("ClickThresholdLevel"), 200);
+      if ((mThresholdLevel < MIN_Threshold) || (mThresholdLevel > MAX_Threshold))
+      {  // corrupted Prefs?
+         mThresholdLevel = 0;  //Off-skip
+      }
+      mClickWidth = gPrefs->Read(base + wxT("ClickWidth"), 20);
+      if ((mClickWidth < MIN_Width) || (mClickWidth > MAX_Width))
+      {  // corrupted Prefs?
+         mClickWidth = 0;  //Off-skip
+      }
+
+      SaveUserPreset(GetCurrentSettingsGroup());
+
+      // Do not migrate again
+      gPrefs->Write(base + wxT("Migrated"), true);
+      gPrefs->Flush();
+   }
+
+   return true;
+}
+
+bool EffectClickRemoval::Process()
 {
    this->CopyInputTracks(); // Set up mOutputTracks.
    bool bGoodResult = true;
@@ -273,9 +335,7 @@ bool EffectClickRemoval::RemoveClicks(size_t len, float *buffer)
    return bResult;
 }
 
-std::unique_ptr<EffectUIValidator> EffectClickRemoval::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &,
-   const EffectOutputs *)
+void EffectClickRemoval::PopulateOrExchange(ShuttleGui & S)
 {
    S.AddSpace(0, 5);
    S.SetBorder(10);
@@ -287,7 +347,8 @@ std::unique_ptr<EffectUIValidator> EffectClickRemoval::PopulateOrExchange(
       mThreshT = S.Id(ID_Thresh)
          .Validator<IntegerValidator<int>>(
             &mThresholdLevel, NumValidatorStyle::DEFAULT,
-            Threshold.min, Threshold.max )
+            MIN_Threshold, MAX_Threshold
+         )
          .AddTextBox(XXO("&Threshold (lower is more sensitive):"),
                      wxT(""),
                      10);
@@ -297,12 +358,12 @@ std::unique_ptr<EffectUIValidator> EffectClickRemoval::PopulateOrExchange(
          .Style(wxSL_HORIZONTAL)
          .Validator<wxGenericValidator>(&mThresholdLevel)
          .MinSize( { 150, -1 } )
-         .AddSlider( {}, mThresholdLevel, Threshold.max, Threshold.min);
+         .AddSlider( {}, mThresholdLevel, MAX_Threshold, MIN_Threshold);
 
       // Click width
       mWidthT = S.Id(ID_Width)
          .Validator<IntegerValidator<int>>(
-            &mClickWidth, NumValidatorStyle::DEFAULT, Width.min, Width.max)
+            &mClickWidth, NumValidatorStyle::DEFAULT, MIN_Width, MAX_Width)
          .AddTextBox(XXO("Max &Spike Width (higher is more sensitive):"),
                      wxT(""),
                      10);
@@ -312,14 +373,14 @@ std::unique_ptr<EffectUIValidator> EffectClickRemoval::PopulateOrExchange(
          .Style(wxSL_HORIZONTAL)
          .Validator<wxGenericValidator>(&mClickWidth)
          .MinSize( { 150, -1 } )
-         .AddSlider( {}, mClickWidth, Width.max, Width.min);
+         .AddSlider( {}, mClickWidth, MAX_Width, MIN_Width);
    }
    S.EndMultiColumn();
 
-   return nullptr;
+   return;
 }
 
-bool EffectClickRemoval::TransferDataToWindow(const EffectSettings &)
+bool EffectClickRemoval::TransferDataToWindow()
 {
    if (!mUIParent->TransferDataToWindow())
    {
@@ -329,7 +390,7 @@ bool EffectClickRemoval::TransferDataToWindow(const EffectSettings &)
    return true;
 }
 
-bool EffectClickRemoval::TransferDataFromWindow(EffectSettings &)
+bool EffectClickRemoval::TransferDataFromWindow()
 {
    if (!mUIParent->Validate() || !mUIParent->TransferDataFromWindow())
    {

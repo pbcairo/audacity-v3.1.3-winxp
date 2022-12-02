@@ -11,7 +11,6 @@
 #define __AUDACITY_SAMPLE_COUNT__
 
 #include <cstddef>
-#include <limits>
 
 //! Positions or offsets within audio files need a wide type
 /*! This type disallows implicit interconversions with narrower types */
@@ -64,9 +63,6 @@ public:
    sampleCount &operator -- () { --value; return *this; }
    sampleCount operator -- (int)
       { sampleCount result{ *this }; --value; return result; }
-
-   static sampleCount min() { return std::numeric_limits<type>::min(); }
-   static sampleCount max() { return std::numeric_limits<type>::max(); }
 
 private:
    type value;

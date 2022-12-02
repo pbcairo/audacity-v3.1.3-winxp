@@ -2,22 +2,21 @@ $nyquist plug-in
 $version 4
 $type process spectral
 $preview linear
-$name (_ "Spectral Edit Parametric EQ")
+$name (_ "Spectral edit parametric EQ")
 $manpage "Spectral_edit_parametric_EQ"
-$debugbutton false
+$action (_ "Filtering...")
 $author (_ "Paul Licameli")
-$release 2.3.0-1
-$copyright (_ "GNU General Public License v2.0")
-
-;; License: GPL v2
-;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
-;;
-;; For information about writing and modifying Nyquist plug-ins:
-;; https://wiki.audacityteam.org/wiki/Nyquist_Plug-ins_Reference
+$release 2.3.0
+$copyright (_ "Released under terms of the GNU General Public License version 2")
 
 ;; SpectralEditParametricEQ.ny by Paul Licameli, November 2014.
 ;; Updated by Steve Daulton 2014 / 2015.
 
+;; Released under terms of the GNU General Public License version 2:
+;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+;;
+;; For information about writing and modifying Nyquist plug-ins:
+;; https://wiki.audacityteam.org/wiki/Nyquist_Plug-ins_Reference
 
 $control control-gain (_ "Gain (dB)") real "" 0 -24 24
 

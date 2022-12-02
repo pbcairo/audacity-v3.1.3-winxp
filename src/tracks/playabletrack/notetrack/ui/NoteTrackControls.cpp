@@ -13,8 +13,6 @@ Paul Licameli split from TrackPanel.cpp
 #include "NoteTrackControls.h"
 
 #include "NoteTrackButtonHandle.h"
-#include "Observer.h"
-#include "Theme.h"
 
 #include "../../ui/PlayableTrackButtonHandles.h"
 #include "NoteTrackSliderHandles.h"
@@ -26,7 +24,7 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../../../NoteTrack.h"
 #include "../../../../widgets/PopupMenuTable.h"
 #include "Project.h"
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../ProjectWindows.h"
 #include "../../../../RefreshCode.h"
 #include "../../../../prefs/ThemePrefs.h"
@@ -221,8 +219,8 @@ void MidiControlsDrawFunction
 
 static const struct NoteTrackTCPLines
    : TCPLines { NoteTrackTCPLines() {
-   *static_cast<TCPLines*>(this) =
-      NoteTrackControlsBase::StaticNoteTCPLines();
+   (TCPLines&)*this =
+      NoteTrackControlsBase::StaticTCPLines();
    insert( end(), {
       { TCPLine::kItemMidiControlsRect, kMidiCellHeight * 4, 0,
         MidiControlsDrawFunction },
@@ -276,8 +274,11 @@ LWSlider * NoteTrackControls::VelocitySlider
 (const wxRect &sliderRect, const NoteTrack *t, bool captured, wxWindow *pParent)
 {
    static std::once_flag flag;
-   std::call_once( flag, []{ ReCreateVelocitySlider({}); });
-   static auto subscription = theTheme.Subscribe(ReCreateVelocitySlider);
+   std::call_once( flag, [] {
+      wxCommandEvent dummy;
+      ReCreateVelocitySlider( dummy );
+      wxTheApp->Bind(EVT_THEME_CHANGE, ReCreateVelocitySlider);
+   } );
 
    wxPoint pos = sliderRect.GetPosition();
    float velocity = t ? t->GetVelocity() : 0.0;
@@ -293,10 +294,9 @@ LWSlider * NoteTrackControls::VelocitySlider
 }
 #endif
 
-void NoteTrackControls::ReCreateVelocitySlider(ThemeChangeMessage message)
+void NoteTrackControls::ReCreateVelocitySlider( wxEvent &evt )
 {
-   if (message.appearance)
-      return;
+   evt.Skip();
 #ifdef EXPERIMENTAL_MIDI_OUT
    wxPoint point{ 0, 0 };
    wxRect sliderRect;

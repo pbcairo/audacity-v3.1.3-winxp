@@ -129,17 +129,16 @@ class PipeClient():
 
     _shared_state = {}
 
-    def __new__(cls, enc='', *p, **k):
+    def __new__(cls, *p, **k):
         self = object.__new__(cls, *p, **k)
         self.__dict__ = cls._shared_state
         return self
 
-    def __init__(self, enc=''):
+    def __init__(self):
         self.timer = False
         self._start_time = 0
         self._write_pipe = None
         self.reply = ''
-        self.enc = enc
         if not self._write_pipe:
             self._write_thread_start()
         self._read_thread_start()
@@ -158,11 +157,7 @@ class PipeClient():
 
     def _write_pipe_open(self):
         """Open _write_pipe."""
-        if self.enc:
-            self._write_pipe = open(WRITE_NAME, 'w', newline='',
-                                    encoding=self.enc)
-        else:
-            self._write_pipe = open(WRITE_NAME, 'w', newline='')
+        self._write_pipe = open(WRITE_NAME, 'w')
 
     def _read_thread_start(self):
         """Start read_pipe thread."""
@@ -207,11 +202,7 @@ class PipeClient():
         """Read FIFO in worker thread."""
         # Thread will wait at this read until it connects.
         # Connection should occur as soon as _write_pipe has connected.
-        read_pipe = None
-        if self.enc:
-            read_pipe = open(READ_NAME, 'r', newline='', encoding=self.enc)
-        else:
-            read_pipe = open(READ_NAME, 'r', newline='')
+        read_pipe = open(READ_NAME, 'r')
         message = ''
         pipe_ok = True
         while pipe_ok:
@@ -271,15 +262,13 @@ def main():
                         help='show command execution time (default: True)')
     parser.add_argument('-d', '--docs', action='store_true',
                         help='show documentation and exit')
-    parser.add_argument('-e', '--pipe-encoding', type=str, default='',
-                        help='non-default encoding to use for r/w pipes')
     args = parser.parse_args()
 
     if args.docs:
         print(__doc__)
         sys.exit(0)
 
-    client = PipeClient(enc=args.pipe_encoding)
+    client = PipeClient()
     while True:
         reply = ''
         if sys.version_info[0] < 3:

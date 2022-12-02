@@ -64,12 +64,12 @@ DevicePrefs::~DevicePrefs()
 }
 
 
-ComponentInterfaceSymbol DevicePrefs::GetSymbol() const
+ComponentInterfaceSymbol DevicePrefs::GetSymbol()
 {
    return DEVICE_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString DevicePrefs::GetDescription() const
+TranslatableString DevicePrefs::GetDescription()
 {
    return XO("Preferences for Device");
 }
@@ -127,10 +127,6 @@ void DevicePrefs::GetNamesAndLabels()
 
 void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
 {
-   ChoiceSetting HostSetting{
-      AudioIOHost,
-      { ByColumns, mHostNames, mHostLabels }
-   };
    S.SetBorder(2);
    S.StartScroller();
 
@@ -140,7 +136,12 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
       S.StartMultiColumn(2);
       {
          S.Id(HostID);
-         mHost = S.TieChoice( XXO("&Host:"), HostSetting);
+         mHost = S.TieChoice( XXO("&Host:"),
+            {
+               AudioIOHost,
+               { ByColumns, mHostNames, mHostLabels }
+            }
+         );
 
          S.AddPrompt(XXO("Using:"));
          S.AddFixedText( Verbatim(wxSafeConvertMB2WX(Pa_GetVersionText() ) ) );
@@ -192,13 +193,13 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
             .NameSuffix(XO("milliseconds"))
             .TieNumericTextBox(XXO("&Buffer length:"),
                                  AudioIOLatencyDuration,
-                                 25);
+                                 9);
          S.AddUnits(XO("milliseconds"));
 
          w = S
             .NameSuffix(XO("milliseconds"))
             .TieNumericTextBox(XXO("&Latency compensation:"),
-               AudioIOLatencyCorrection, 25);
+               AudioIOLatencyCorrection, 9);
          S.AddUnits(XO("milliseconds"));
       }
       S.EndThreeColumn();
@@ -411,19 +412,15 @@ bool DevicePrefs::Commit()
       AudioIORecordChannels.Write(mChannels->GetSelection() + 1);
    }
 
-   AudioIOLatencyDuration.Invalidate();
-   AudioIOLatencyCorrection.Invalidate();
    return true;
 }
 
-PrefsPanel *DevicePrefsFactory(wxWindow *parent, wxWindowID winid, AudacityProject *)
-{
-   wxASSERT(parent); // to justify safenew
-   return safenew DevicePrefs(parent, winid);
-}
-
 namespace{
-   PrefsPanel::Registration sAttachment{ "Device",
-      DevicePrefsFactory
-   };
+PrefsPanel::Registration sAttachment{ "Device",
+   [](wxWindow *parent, wxWindowID winid, AudacityProject *)
+   {
+      wxASSERT(parent); // to justify safenew
+      return safenew DevicePrefs(parent, winid);
+   }
+};
 }

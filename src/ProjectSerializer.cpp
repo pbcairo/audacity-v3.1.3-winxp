@@ -2,7 +2,7 @@
 
    Audacity: A Digital Audio Editor
    Audacity(R) is copyright (c) 1999-2010 Audacity Team.
-   License: GPL v2 or later.  See License.txt.
+   License: GPL v2.  See License.txt.
 
    ProjectSerializer.cpp
 
@@ -27,6 +27,10 @@
 #include <wx/log.h>
 
 #include "BufferedStreamReader.h"
+/*
+#if (!_DLL)
+std::locale::id std::codecvt<char16_t, char, _Mbstatet>::id;
+#endif*/
 
 ///
 /// ProjectSerializer class
@@ -349,8 +353,14 @@ std::string FastStringConvert(const void* bytes, int bytesCount)
    if (isAscii)
       return std::string(begin, end);
    
-   return std::wstring_convert<std::codecvt_utf8<BaseCharType>, BaseCharType>()
-      .to_bytes(begin, end);
+   //if (std::is_same<BaseCharType, char16_t>::value) {
+       std::wstring_convert<std::codecvt_utf8<int16_t>, int16_t> cvt;
+       auto _p = reinterpret_cast<const int16_t*>(bytes);
+       return cvt.to_bytes(_p, _p + bytesCount / charSize);
+   /* }
+   else {
+       return std::wstring_convert<std::codecvt_utf8<BaseCharType>, BaseCharType>().to_bytes(begin, end);
+   }*/
 }
 } // namespace
 

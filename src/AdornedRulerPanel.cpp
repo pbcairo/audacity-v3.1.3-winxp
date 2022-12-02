@@ -809,12 +809,12 @@ public:
    ResizePlayRegionHandle(
       AdornedRulerPanel *pParent, wxCoord xx, bool hitLeft )
    : PlayRegionAdjustingHandle( pParent, xx, MenuChoice::QuickPlay, {wxCURSOR_SIZEWE} )
-   , mHitLeft{ hitLeft }
+   // , mHitLeft{ hitLeft }
    {
    }
    
 private:
-   void DoStartAdjust(AudacityProject &project, double time) override
+   void DoStartAdjust(AudacityProject &project, double time) // override
    {
    }
 
@@ -1221,7 +1221,7 @@ AttachedWindows::RegisteredFactory sKey{
    auto &viewInfo = ViewInfo::Get( project );
    auto &window = ProjectWindow::Get( project );
 
-   return safenew AdornedRulerPanel( &project, window.GetTrackListWindow(),
+   return safenew AdornedRulerPanel( &project, window.GetTopPanel(),
       wxID_ANY,
       wxDefaultPosition,
       wxSize( -1, AdornedRulerPanel::GetRulerHeight(false) ),
@@ -1295,18 +1295,21 @@ AdornedRulerPanel::AdornedRulerPanel(AudacityProject* project,
    wxToolTip::Enable(true);
 #endif
 
-   mAudioIOSubscription = AudioIO::Get()
-      ->Subscribe(*this, &AdornedRulerPanel::OnAudioStartStop);
+   wxTheApp->Bind(EVT_AUDIOIO_CAPTURE,
+                     &AdornedRulerPanel::OnAudioStartStop,
+                     this);
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK,
+                     &AdornedRulerPanel::OnAudioStartStop,
+                     this);
 
    // Delay until after CommandManager has been populated:
    this->CallAfter( &AdornedRulerPanel::UpdatePrefs );
 
-   mThemeChangeSubscription =
-      theTheme.Subscribe(*this, &AdornedRulerPanel::OnThemeChange);
+   wxTheApp->Bind(EVT_THEME_CHANGE, &AdornedRulerPanel::OnThemeChange, this);
 
    // Bind event that updates the play region
-   mPlayRegionSubscription = mViewInfo->selectedRegion.Subscribe(
-      *this, &AdornedRulerPanel::OnSelectionChange);
+   mViewInfo->selectedRegion.Bind(EVT_SELECTED_REGION_CHANGE,
+      &AdornedRulerPanel::OnSelectionChange, this);
 
    // And call it once to initialize it
    DoSelectionChange( mViewInfo->selectedRegion );
@@ -1523,12 +1526,12 @@ void AdornedRulerPanel::DoIdle()
       Refresh();
 }
 
-void AdornedRulerPanel::OnAudioStartStop(AudioIOEvent evt)
+void AdornedRulerPanel::OnAudioStartStop(wxCommandEvent & evt)
 {
-   if (evt.type == AudioIOEvent::MONITOR)
-      return;
-   if ( evt.type == AudioIOEvent::CAPTURE ) {
-      if (evt.on)
+   evt.Skip();
+
+   if ( evt.GetEventType() == EVT_AUDIOIO_CAPTURE ) {
+      if (evt.GetInt() != 0)
       {
          mIsRecording = true;
          this->CellularPanel::CancelDragging( false );
@@ -1542,7 +1545,7 @@ void AdornedRulerPanel::OnAudioStartStop(AudioIOEvent evt)
       }
    }
 
-   if ( !evt.on )
+   if ( evt.GetInt() == 0 )
       // So that the play region is updated
       DoSelectionChange( mViewInfo->selectedRegion );
 }
@@ -1621,16 +1624,18 @@ void AdornedRulerPanel::OnLeave(wxMouseEvent& evt)
    });
 }
 
-void AdornedRulerPanel::OnThemeChange(ThemeChangeMessage message)
+void AdornedRulerPanel::OnThemeChange(wxCommandEvent& evt)
 {
-   if (message.appearance)
-      return;
+   evt.Skip();
    ReCreateButtons();
 }
 
-void AdornedRulerPanel::OnSelectionChange(Observer::Message)
+void AdornedRulerPanel::OnSelectionChange(SelectedRegionEvent& evt)
 {
-   auto &selectedRegion = mViewInfo->selectedRegion;
+   evt.Skip();
+   if (!evt.pRegion)
+      return;
+   auto &selectedRegion = *evt.pRegion;
    DoSelectionChange( selectedRegion );
 }
 
@@ -2142,7 +2147,7 @@ bool AdornedRulerPanel::SetPanelSize()
    if ( size != oldSize ) {
       SetSize(size);
       SetMinSize(size);
-      PostSizeEventToParent();
+      GetParent()->PostSizeEventToParent();
       return true;
    }
    else
@@ -2246,7 +2251,7 @@ void AdornedRulerPanel::ShowMenu(const wxPoint & pos)
    {
       auto item = rulerMenu.Append(OnClearPlayRegionID,
          /* i18n-hint Clear is a verb */
-         _("Clear Loop"));
+         _("Clear Looping Region"));
    }
 
    {

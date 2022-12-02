@@ -80,6 +80,7 @@ ToolsToolBar::ToolsToolBar( AudacityProject &project )
    //Read the following wxASSERTs as documentating a design decision
    wxASSERT( selectTool   == selectTool   - firstTool );
    wxASSERT( envelopeTool == envelopeTool - firstTool );
+   wxASSERT( zoomTool     == zoomTool     - firstTool );
    wxASSERT( drawTool     == drawTool     - firstTool );
    wxASSERT( multiTool    == multiTool    - firstTool );
    bool multiToolActive = false;
@@ -147,6 +148,7 @@ void ToolsToolBar::RegenerateTooltips()
    } table[] = {
       { selectTool,   wxT("SelectTool"),    XO("Selection Tool")  },
       { envelopeTool, wxT("EnvelopeTool"),  XO("Envelope Tool")   },
+      { zoomTool,     wxT("ZoomTool"),      XO("Zoom Tool")       },
       { drawTool,     wxT("DrawTool"),      XO("Draw Tool")       },
       { multiTool,    wxT("MultiTool"),     XO("Multi-Tool")      },
    };
@@ -157,6 +159,7 @@ void ToolsToolBar::RegenerateTooltips()
       ToolBar::SetButtonToolTip( mProject,
          *mTool[entry.tool], &command, 1u );
    }
+
    #endif
 
    //		wxSafeYield();
@@ -193,13 +196,14 @@ void ToolsToolBar::Populate()
    SetBackgroundColour( theTheme.Colour( clrMedium  ) );
    MakeButtonBackgroundsSmall();
 
-   Add(mToolSizer = safenew wxGridSizer(2, 2, 1, 1));
+   Add(mToolSizer = safenew wxGridSizer(2, 3, 1, 1));
 
    /* Tools */
    using namespace ToolCodes;
    mTool[ selectTool   ] = MakeTool( this, bmpIBeam, selectTool, XO("Selection Tool") );
    mTool[ envelopeTool ] = MakeTool( this, bmpEnvelope, envelopeTool, XO("Envelope Tool") );
    mTool[ drawTool     ] = MakeTool( this, bmpDraw, drawTool, XO("Draw Tool") );
+   mTool[ zoomTool     ] = MakeTool( this, bmpZoom, zoomTool, XO("Zoom Tool") );
    mTool[ multiTool    ] = MakeTool( this, bmpMulti, multiTool, XO("Multi-Tool") );
 
    DoToolChanged();
@@ -308,6 +312,12 @@ void OnDrawTool(const CommandContext &context)
    SetTool(context.project, ToolCodes::drawTool);
 }
 
+/// Handler to set the Zoom tool active
+void OnZoomTool(const CommandContext &context)
+{
+   SetTool(context.project, ToolCodes::zoomTool);
+}
+
 void OnMultiTool(const CommandContext &context)
 {
    SetTool(context.project, ToolCodes::multiTool);
@@ -357,6 +367,8 @@ BaseItemSharedPtr ExtraToolsMenu()
          FN(OnEnvelopeTool), AlwaysEnabledFlag, wxT("F2") ),
       Command( wxT("DrawTool"), XXO("&Draw Tool"), FN(OnDrawTool),
          AlwaysEnabledFlag, wxT("F3") ),
+      Command( wxT("ZoomTool"), XXO("&Zoom Tool"), FN(OnZoomTool),
+         AlwaysEnabledFlag, wxT("F4") ),
       Command( wxT("MultiTool"), XXO("&Multi Tool"), FN(OnMultiTool),
          AlwaysEnabledFlag, wxT("F6") ),
       Command( wxT("PrevTool"), XXO("&Previous Tool"), FN(OnPrevTool),

@@ -16,11 +16,9 @@ Paul Licameli
 #endif
 #include "widgets/AudacityMessageBox.h"
 #include "ProgressDialog.h"
-#include "MultiDialog.h"
 #include <wx/app.h>
 #include <wx/progdlg.h>
 #include <wx/windowptr.h>
-#include <wx/utils.h>
 
 using namespace BasicUI;
 
@@ -155,6 +153,26 @@ wxWidgetsBasicUI::DoMessageBox(
    }
 }
 
+namespace {
+struct MyProgressDialog : BasicUI::ProgressDialog {
+   wxWindowPtr<::ProgressDialog> mpDialog;
+
+   explicit MyProgressDialog(::ProgressDialog *pDialog)
+   : mpDialog{ pDialog }
+   {
+      wxASSERT(pDialog);
+   }
+   ~MyProgressDialog() override = default;
+   ProgressResult Poll(
+      unsigned long long numerator,
+      unsigned long long denominator,
+      const TranslatableString &message) override
+   {
+      return mpDialog->Update(numerator, denominator, message);
+   }
+};
+}
+
 std::unique_ptr<BasicUI::ProgressDialog>
 wxWidgetsBasicUI::DoMakeProgress(const TranslatableString & title,
    const TranslatableString &message,
@@ -162,36 +180,39 @@ wxWidgetsBasicUI::DoMakeProgress(const TranslatableString & title,
    const TranslatableString &remainingLabelText)
 {
    unsigned options = 0;
-   if (!(flags & ProgressShowStop))
+   if (~(flags & ProgressShowStop))
       options |= pdlgHideStopButton;
-   if (!(flags & ProgressShowCancel))
+   if (~(flags & ProgressShowCancel))
       options |= pdlgHideCancelButton;
    if ((flags & ProgressHideTime))
       options |= pdlgHideElapsedTime;
    if ((flags & ProgressConfirmStopOrCancel))
       options |= pdlgConfirmStopCancel;
-   // Usually wxWindow objects should not be managed by std::unique_ptr
+   // Note that wxWindow objects should not be managed by std::unique_ptr
    // See https://docs.wxwidgets.org/3.0/overview_windowdeletion.html
-   // But on macOS the use of wxWindowPtr for the progress dialog sometimes
-   // causes hangs.
-   return std::make_unique<::ProgressDialog>(
-      title, message, options, remainingLabelText);
+   // So there is an extra indirection:  return a deletable object that holds
+   // the proper kind of smart pointer to a wxWindow.
+   return std::make_unique<MyProgressDialog>(
+      safenew ::ProgressDialog(
+         title, message, options, remainingLabelText));
 }
 
 namespace {
-struct MyGenericProgress : wxGenericProgressDialog, GenericProgressDialog {
+struct MyGenericProgress : GenericProgressDialog {
+   wxWindowPtr<wxGenericProgressDialog> mpDialog;
+
    MyGenericProgress(const TranslatableString &title,
       const TranslatableString &message,
       wxWindow *parent = nullptr)
-      : wxGenericProgressDialog{
+      : mpDialog{ safenew wxGenericProgressDialog(
          title.Translation(), message.Translation(),
          300000,     // range
          parent,
          wxPD_APP_MODAL | wxPD_ELAPSED_TIME | wxPD_SMOOTH
-      }
+      ) }
    {}
    ~MyGenericProgress() override = default;
-   void Pulse() override { wxGenericProgressDialog::Pulse(); }
+   void Pulse() override { mpDialog->Pulse(); }
 };
 }
 
@@ -203,18 +224,4 @@ wxWidgetsBasicUI::DoMakeGenericProgress(
 {
    return std::make_unique<MyGenericProgress>(
       title, message, wxWidgetsWindowPlacement::GetParent(placement));
-}
-
-int wxWidgetsBasicUI::DoMultiDialog(const TranslatableString &message,
-   const TranslatableString &title,
-   const TranslatableStrings &buttons,
-   const ManualPageID &helpPage,
-   const TranslatableString &boxMsg, bool log)
-{
-   return ::ShowMultiDialog(message, title, buttons, helpPage, boxMsg, log);
-}
-
-bool wxWidgetsBasicUI::DoOpenInDefaultBrowser(const wxString &url)
-{
-   return wxLaunchDefaultBrowser(url);
 }

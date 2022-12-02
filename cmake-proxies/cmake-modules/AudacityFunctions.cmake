@@ -227,12 +227,7 @@ function( audacity_append_common_compiler_options var use_pch )
          PRIVATE
             # include the correct config file; give absolute path to it, so
             # that this works whether in src, modules, libraries
-            $<$<PLATFORM_ID:Windows>:
-               $<IF:$<CXX_COMPILER_ID:MSVC>, 
-                  /FI${CMAKE_BINARY_DIR}/src/private/configwin.h,
-                  -include ${CMAKE_BINARY_DIR}/src/private/configwin.h
-               >
-            >
+            $<$<PLATFORM_ID:Windows>:/FI${CMAKE_BINARY_DIR}/src/private/configwin.h>
             $<$<PLATFORM_ID:Darwin>:-include ${CMAKE_BINARY_DIR}/src/private/configmac.h>
             $<$<NOT:$<PLATFORM_ID:Windows,Darwin>>:-include ${CMAKE_BINARY_DIR}/src/private/configunix.h>
       )
@@ -251,7 +246,7 @@ function( audacity_append_common_compiler_options var use_pch )
 
          # This renames a good use of this C++ keyword that we don't need
 	      # to review when hunting for leaks because of naked new and delete.
-	      -DPROHIBITED==delete
+	 -DPROHIBITED==delete
 
          # Reviewed, certified, non-leaky uses of NEW that immediately entrust
 	      # their results to RAII objects.
@@ -267,18 +262,17 @@ function( audacity_append_common_compiler_options var use_pch )
          $<$<CXX_COMPILER_ID:AppleClang,Clang>:-Werror=return-type>
          $<$<CXX_COMPILER_ID:AppleClang,Clang>:-Werror=dangling-else>
          $<$<CXX_COMPILER_ID:AppleClang,Clang>:-Werror=return-stack-address>
-         $<$<CXX_COMPILER_ID:AppleClang,Clang>:-Werror=defaulted-function-deleted>
 	      # Yes, CMake will change -D to /D as needed for Windows:
          -DWXINTL_NO_GETTEXT_MACRO
          $<$<CXX_COMPILER_ID:MSVC>:-D_USE_MATH_DEFINES>
          $<$<CXX_COMPILER_ID:MSVC>:-DNOMINMAX>
 
          # Define/undefine _DEBUG
-         # Yes, -U to /U too as needed for Windows:
-         $<IF:$<CONFIG:Debug>,-D_DEBUG=1,-U_DEBUG>
+	 # Yes, -U to /U too as needed for Windows:
+	 $<IF:$<CONFIG:Debug>,-D_DEBUG=1,-U_DEBUG>
 
          $<$<PLATFORM_ID:Darwin>:-DUSE_AQUA_THEME>
-   )
+   )   
    # Definitions controlled by the AUDACITY_BUILD_LEVEL switch
    if( AUDACITY_BUILD_LEVEL EQUAL 0 )
       list( APPEND ${var} -DIS_ALPHA -DUSE_ALPHA_MANUAL )
@@ -287,7 +281,7 @@ function( audacity_append_common_compiler_options var use_pch )
    else()
       list( APPEND ${var} -DIS_RELEASE )
    endif()
-
+  
    set( ${var} "${${var}}" PARENT_SCOPE )
 endfunction()
 
@@ -304,7 +298,7 @@ endfunction()
 function( import_symbol_define var module_name )
    import_export_symbol( symbol "${module_name}" )
    if( CMAKE_SYSTEM_NAME MATCHES "Windows" )
-      set( value "__declspec(dllimport)" )
+      set( value "_declspec(dllimport)" )
    elseif( HAVE_VISIBILITY )
       set( value "__attribute__((visibility(\"default\")))" )
    else()
@@ -316,7 +310,7 @@ endfunction()
 function( export_symbol_define var module_name )
    import_export_symbol( symbol "${module_name}" )
    if( CMAKE_SYSTEM_NAME MATCHES "Windows" )
-      set( value "__declspec(dllexport)" )
+      set( value "_declspec(dllexport)" )
    elseif( HAVE_VISIBILITY )
       set( value "__attribute__((visibility(\"default\")))" )
    else()
@@ -385,35 +379,12 @@ function( audacity_module_fn NAME SOURCES IMPORT_TARGETS
       )
       if( CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin" )
          add_custom_command(
-	         TARGET ${TARGET}
+	    TARGET ${TARGET}
             COMMAND ${CMAKE_COMMAND}
-	            -D SRC="${_MODDIR}/${TARGET}.so"
-               -D DST="${_PKGLIB}"
+	       -D SRC="${_MODDIR}/${TARGET}.so"
                -D WXWIN="${_SHARED_PROXY_BASE_PATH}/$<CONFIG>"
                -P ${AUDACITY_MODULE_PATH}/CopyLibs.cmake
             POST_BUILD )
-      elseif( CMAKE_HOST_SYSTEM_NAME MATCHES "Windows")
-         add_custom_command(
-            TARGET
-               ${TARGET}
-            COMMAND
-               ${CMAKE_COMMAND} -D SRC="${_MODDIR}/${TARGET}.dll"
-                              -D DST="${_EXEDIR}"
-                              -D WXWIN="${_SHARED_PROXY_BASE_PATH}/$<CONFIG>/"
-                              -P ${AUDACITY_MODULE_PATH}/CopyLibs.cmake
-            POST_BUILD
-         )
-      else()
-         add_custom_command(
-            TARGET
-               ${TARGET}
-            COMMAND
-               ${CMAKE_COMMAND} -D SRC="${_MODDIR}/${TARGET}.so"
-                              -D DST="${_PKGLIB}"
-                              -D WXWIN="${_SHARED_PROXY_BASE_PATH}/$<CONFIG>"
-                              -P ${AUDACITY_MODULE_PATH}/CopyLibs.cmake
-            POST_BUILD
-         )
       endif()
    else()
       set( ATTRIBUTES "shape=octagon" )
@@ -470,17 +441,10 @@ function( audacity_module_fn NAME SOURCES IMPORT_TARGETS
    target_link_libraries( ${TARGET} PUBLIC ${LIBRARIES} )
 
    if( NOT CMAKE_SYSTEM_NAME MATCHES "Windows" )
-      # Generate-time boolean values must be "0" or "1",
-      # not "on", "off", etc. like configure-time booleans
-      if (CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo")
-         set(nostrip 1)
-      else()
-         set(nostrip 0)
-      endif()
       add_custom_command(
          TARGET "${TARGET}"
          POST_BUILD
-         COMMAND "$<IF:$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>,${nostrip}>,echo,strip>" -x $<TARGET_FILE:${TARGET}>
+         COMMAND $<IF:$<CONFIG:Debug>,echo,strip> -x $<TARGET_FILE:${TARGET}>
       )
    endif()
 
@@ -522,6 +486,9 @@ function( audacity_module_fn NAME SOURCES IMPORT_TARGETS
 
    # collect dependency information
    list( APPEND GRAPH_EDGES "\"${TARGET}\" [${ATTRIBUTES}]" )
+   if (NOT LIBTYPE STREQUAL "MODULE")
+      list( APPEND GRAPH_EDGES "\"Audacity\" -> \"${TARGET}\"" )
+   endif ()
    set(ACCESS PUBLIC PRIVATE INTERFACE)
    foreach( IMPORT ${IMPORT_TARGETS} )
       if(IMPORT IN_LIST ACCESS)
@@ -531,11 +498,6 @@ function( audacity_module_fn NAME SOURCES IMPORT_TARGETS
       list( APPEND GRAPH_EDGES "\"${TARGET}\" -> \"${IMPORT}\"" )
    endforeach()
    set( GRAPH_EDGES "${GRAPH_EDGES}" PARENT_SCOPE )
-
-   # collect unit test targets if they are present
-   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-      add_subdirectory(tests)
-   endif()
 endfunction()
 
 # Set up for defining a module target.
@@ -582,6 +544,9 @@ macro( audacity_library NAME SOURCES IMPORT_TARGETS
       "SHARED"
    )
    set( GRAPH_EDGES "${GRAPH_EDGES}" PARENT_SCOPE )
+   # Collect list of libraries for the executable to declare dependency on
+   list( APPEND AUDACITY_LIBRARIES "${NAME}" )
+   set( AUDACITY_LIBRARIES "${AUDACITY_LIBRARIES}" PARENT_SCOPE )
 endmacro()
 
 # A special macro for header only libraries
@@ -595,6 +560,9 @@ macro( audacity_header_only_library NAME SOURCES IMPORT_TARGETS
    target_sources( ${NAME} INTERFACE ${SOURCES})
    target_link_libraries( ${NAME} INTERFACE ${IMPORT_TARGETS} )
    target_compile_definitions( ${NAME} INTERFACE ${ADDITIONAL_DEFINES} )
+
+   list( APPEND AUDACITY_LIBRARIES "${NAME}" )
+   set( AUDACITY_LIBRARIES "${AUDACITY_LIBRARIES}" PARENT_SCOPE )
 endmacro()
 
 #

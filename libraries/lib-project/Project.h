@@ -76,6 +76,9 @@ using AttachedProjectObjects = ClientData::Site<
    AudacityProject, ClientData::Base, ClientData::SkipCopying, std::shared_ptr
 >;
 
+wxDECLARE_EXPORTED_EVENT(PROJECT_API,
+                         EVT_TRACK_PANEL_TIMER, wxCommandEvent);
+
 ///\brief The top-level handle to an Audacity project.  It serves as a source
 /// of events that other objects can bind to, and a container of associated
 /// sub-objects that it treats opaquely.  It stores a filename and a status
@@ -87,14 +90,10 @@ class PROJECT_API AudacityProject final
    , public AttachedProjectObjects
    , public std::enable_shared_from_this<AudacityProject>
 {
-   struct CreateToken{};
  public:
    using AttachedObjects = ::AttachedProjectObjects;
 
-   //! Use this factory function
-   static std::shared_ptr<AudacityProject> Create();
-   //! Don't use this constructor directly
-   AudacityProject(CreateToken);
+   AudacityProject();
    virtual ~AudacityProject();
 
    int GetProjectNumber(){ return mProjectNo;}

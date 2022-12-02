@@ -17,7 +17,7 @@ ProjectWindowBase::ProjectWindowBase(wxWindow * parent, wxWindowID id,
                                  const wxPoint & pos,
                                  const wxSize & size, AudacityProject &project)
    : wxFrame(parent, id, _TS("Audacity"), pos, size)
-   , mwProject{ project.weak_from_this() }
+   , mProject{ project }
 {
    SetProjectFrame( project, *this );
 
@@ -44,7 +44,7 @@ ProjectWindowBase *FindProjectWindow( wxWindow *pWindow )
 AudacityProject *FindProjectFromWindow( wxWindow *pWindow )
 {
    auto pProjectWindow = FindProjectWindow( pWindow );
-   return pProjectWindow ? pProjectWindow->FindProject().get() : nullptr;
+   return pProjectWindow ? &pProjectWindow->GetProject() : nullptr;
 }
 
 const AudacityProject *FindProjectFromWindow( const wxWindow *pWindow )

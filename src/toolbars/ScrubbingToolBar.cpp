@@ -34,11 +34,14 @@
 #include "AllThemeResources.h"
 #include "ImageManipulation.h"
 #include "Prefs.h"
-#include "UndoManager.h"
+#include "../UndoManager.h"
 #include "../widgets/AButton.h"
 #include "../tracks/ui/Scrubbing.h"
 
 IMPLEMENT_CLASS(ScrubbingToolBar, ToolBar);
+
+//const int BUTTON_WIDTH = 27;
+//const int SEPARATOR_WIDTH = 14;
 
 ////////////////////////////////////////////////////////////
 /// Methods for ScrubbingToolBar

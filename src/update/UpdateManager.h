@@ -36,7 +36,7 @@ public:
     UpdateManager() = default;
 
     static UpdateManager& GetInstance();
-    static void Start(bool suppressModal);
+    static void Start();
 
     void GetUpdates(bool ignoreNetworkErrors, bool configurableNotification);
 

@@ -23,7 +23,7 @@ doing the second pass over all selected tracks.
 
 #include "../WaveTrack.h"
 
-bool EffectTwoPassSimpleMono::Process(EffectInstance &, EffectSettings &settings)
+bool EffectTwoPassSimpleMono::Process()
 {
    mPass = 0;
    mSecondPassDisabled = false;
@@ -42,13 +42,13 @@ bool EffectTwoPassSimpleMono::Process(EffectInstance &, EffectSettings &settings
    mTrackLists[0] = &mOutputTracks;
    mTrackLists[1] = mSecondPassDisabled ? &mOutputTracks : &mWorkTracks;
 
-   bool bGoodResult = ProcessPass(settings);
+   bool bGoodResult = ProcessPass();
 
    if (bGoodResult && !mSecondPassDisabled)
    {
       mPass = 1;
       if (InitPass2())
-         bGoodResult = ProcessPass(settings);
+         bGoodResult = ProcessPass();
    }
 
    mWorkTracks->Clear();
@@ -58,7 +58,7 @@ bool EffectTwoPassSimpleMono::Process(EffectInstance &, EffectSettings &settings
    return bGoodResult;
 }
 
-bool EffectTwoPassSimpleMono::ProcessPass(EffectSettings &settings)
+bool EffectTwoPassSimpleMono::ProcessPass()
 {
    //Iterate over each track
    mCurTrackNum = 0;

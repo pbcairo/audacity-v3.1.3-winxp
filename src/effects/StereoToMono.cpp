@@ -19,10 +19,8 @@
 
 #include <wx/intl.h>
 
-#include "Mix.h"
-#include "MixAndRender.h"
+#include "../Mix.h"
 #include "Project.h"
-#include "RealtimeEffectList.h"
 #include "../WaveTrack.h"
 #include "../widgets/ProgressDialog.h"
 
@@ -41,42 +39,44 @@ EffectStereoToMono::~EffectStereoToMono()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectStereoToMono::GetSymbol() const
+ComponentInterfaceSymbol EffectStereoToMono::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectStereoToMono::GetDescription() const
+TranslatableString EffectStereoToMono::GetDescription()
 {
    return XO("Converts stereo tracks to mono");
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectStereoToMono::GetType() const
+EffectType EffectStereoToMono::GetType()
 {
    // Really EffectTypeProcess, but this prevents it from showing in the Effect Menu
    return EffectTypeHidden;
 }
 
-bool EffectStereoToMono::IsInteractive() const
+bool EffectStereoToMono::IsInteractive()
 {
    return false;
 }
 
-unsigned EffectStereoToMono::GetAudioInCount() const
+// EffectClientInterface implementation
+
+unsigned EffectStereoToMono::GetAudioInCount()
 {
    return 2;
 }
 
-unsigned EffectStereoToMono::GetAudioOutCount() const
+unsigned EffectStereoToMono::GetAudioOutCount()
 {
    return 1;
 }
 
 // Effect implementation
 
-bool EffectStereoToMono::Process(EffectInstance &, EffectSettings &)
+bool EffectStereoToMono::Process()
 {
    // Do not use mWaveTracks here.  We will possibly DELETE tracks,
    // so we must use the "real" tracklist.
@@ -174,12 +174,11 @@ bool EffectStereoToMono::ProcessOne(sampleCount & curTime, sampleCount totalTime
    auto start = wxMin(left->GetStartTime(), right->GetStartTime());
    auto end = wxMax(left->GetEndTime(), right->GetEndTime());
 
-   Mixer::Inputs tracks;
-   for (auto pTrack : { left, right })
-      tracks.emplace_back(
-         pTrack->SharedPointer<const SampleTrack>(), GetEffectStages(*pTrack));
+   WaveTrackConstArray tracks;
+   tracks.push_back(left->SharedPointer< const WaveTrack >());
+   tracks.push_back(right->SharedPointer< const WaveTrack >());
 
-   Mixer mixer(move(tracks),
+   Mixer mixer(tracks,
                true,                // Throw to abort mix-and-render if read fails:
                Mixer::WarpOptions{*inputTracks()},
                start,
@@ -194,7 +193,8 @@ bool EffectStereoToMono::ProcessOne(sampleCount & curTime, sampleCount totalTime
    auto outTrack = left->EmptyCopy();
    outTrack->ConvertToSampleFormat(floatSample);
 
-   while (auto blockLen = mixer.Process()) {
+   while (auto blockLen = mixer.Process(idealBlockLen))
+   {
       auto buffer = mixer.GetBuffer();
       for (auto i = 0; i < blockLen; i++)
       {
@@ -215,12 +215,11 @@ bool EffectStereoToMono::ProcessOne(sampleCount & curTime, sampleCount totalTime
    left->Paste(minStart, outTrack.get());
    mOutputTracks->UnlinkChannels(*left);
    mOutputTracks->Remove(right);
-   RealtimeEffectList::Get(*left).Clear();
 
    return bResult;
 }
 
-bool EffectStereoToMono::IsHiddenFromMenus() const
+bool EffectStereoToMono::IsHidden()
 {
    return true;
 }

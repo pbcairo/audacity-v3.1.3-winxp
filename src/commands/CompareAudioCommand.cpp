@@ -47,16 +47,10 @@ extern void RegisterCompareAudio( Registrar & R){
 
 }
 
-template<bool Const>
-bool CompareAudioCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
+bool CompareAudioCommand::DefineParams( ShuttleParams & S ){
    S.Define( errorThreshold,  wxT("Threshold"),   0.0f,  0.0f,    0.01f,    1.0f );
    return true;
 }
-bool CompareAudioCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool CompareAudioCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void CompareAudioCommand::PopulateOrExchange(ShuttleGui & S)
 {

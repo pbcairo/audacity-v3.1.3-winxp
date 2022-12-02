@@ -544,10 +544,11 @@ void ExpandingToolBar::StartMoving()
 //   ImageRoll tgtImageRoll = ImageRoll(ImageRoll::VerticalRoll,
 //                                      tgtImage,
 //                                      magicColor);
-   mTargetPanel = safenew wxPanelWrapper(mAreaParent, -1, //tgtImageRoll,
+   mTargetPanel = safenew ImageRollPanel(mAreaParent, -1, //tgtImageRoll,
                                      wxDefaultPosition,
                                      wxDefaultSize,
                                      wxTRANSPARENT_WINDOW);
+   mTargetPanel->SetLogicalFunction(wxXOR);
    mTargetPanel->SetSize(mDropTarget);
 
    // This gives time for wx to finish redrawing the window that way.

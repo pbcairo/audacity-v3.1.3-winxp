@@ -21,7 +21,6 @@ Paul Licameli split from TrackPanel.cpp
 #include "AllThemeResources.h"
 #include "../../../../HitTestResult.h"
 #include "Theme.h"
-#include "../../../../TrackArt.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelDrawingContext.h"
 #include "../../../../TrackPanelMouseEvent.h"
@@ -750,13 +749,5 @@ void NoteTrackView::Draw(
       DrawNoteTrack(context, nt.get(), rect, muted, selected);
    }
    CommonTrackView::Draw( context, rect, iPass );
-}
-
-#include "SyncLock.h"
-
-using GetNoteTrackSyncLockPolicy =
-   GetSyncLockPolicy::Override< const NoteTrack >;
-DEFINE_ATTACHED_VIRTUAL_OVERRIDE(GetNoteTrackSyncLockPolicy) {
-   return [](auto &) { return SyncLockPolicy::Grouped; };
 }
 #endif

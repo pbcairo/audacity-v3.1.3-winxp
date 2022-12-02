@@ -199,9 +199,7 @@ void ReplayPopup( wxMenu *theMenu )
    }
 
    // Replay did not find all as expected
-   throw Journal::SyncException(wxString::Format(
-      "PopupMenu has failed to invoke %s",
-      wxJoin(fields, ',').ToStdString().c_str()));
+   throw Journal::SyncException{};
 }
 
 }
@@ -223,7 +221,7 @@ void Handle::Popup( const BasicUI::WindowPlacement &window, const Point &pos )
          ReplayPopup( pMenu );
       else
          pWindow->PopupMenu( pMenu, { pos.x, pos.y } );
-
+      
       if ( !sHandledEvent )
          // Menu popped but no command was selected.  Record that.
          Journal::Output( JournalCode );

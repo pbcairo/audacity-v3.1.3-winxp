@@ -64,12 +64,12 @@ MidiIOPrefs::~MidiIOPrefs()
 {
 }
 
-ComponentInterfaceSymbol MidiIOPrefs::GetSymbol() const
+ComponentInterfaceSymbol MidiIOPrefs::GetSymbol()
 {
    return MIDI_IO_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString MidiIOPrefs::GetDescription() const
+TranslatableString MidiIOPrefs::GetDescription()
 {
    return XO("Preferences for MidiIO");
 }
@@ -130,11 +130,7 @@ void MidiIOPrefs::GetNamesAndLabels() {
    }
 }
 
-void MidiIOPrefs::PopulateOrExchange( ShuttleGui & S )
-{
-   ChoiceSetting Setting{ L"/MidiIO/Host",
-      { ByColumns, mHostNames, mHostLabels }
-   };
+void MidiIOPrefs::PopulateOrExchange( ShuttleGui & S ) {
 
    S.SetBorder(2);
    S.StartScroller();
@@ -146,7 +142,12 @@ void MidiIOPrefs::PopulateOrExchange( ShuttleGui & S )
       {
          S.Id(HostID);
          /* i18n-hint: (noun) */
-         mHost = S.TieChoice(XXO("&Host:"), Setting);
+         mHost = S.TieChoice( XXO("&Host:"),
+            {
+               wxT("/MidiIO/Host"),
+               { ByColumns, mHostNames, mHostLabels }
+            }
+         );
 
          S.AddPrompt(XXO("Using: PortMidi"));
       }
@@ -282,7 +283,6 @@ bool MidiIOPrefs::Commit()
             wxString(wxSafeConvertMB2WX(info->name))));
    }
 #endif
-   MIDISynthLatency_ms.Invalidate();
    return gPrefs->Flush();
 }
 

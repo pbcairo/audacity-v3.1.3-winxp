@@ -1098,11 +1098,6 @@ void ProgressDialog::Reinit()
    wxDialogWrapper::Show(true);
 }
 
-void ProgressDialog::SetDialogTitle(const TranslatableString& title)
-{
-   SetTitle(title);
-}
-
 // Add a NEW text column each time this is called.
 void ProgressDialog::AddMessageAsColumn(wxBoxSizer * pSizer,
                                         const MessageColumn & column,
@@ -1493,13 +1488,6 @@ ProgressResult ProgressDialog::Update(
    }
 }
 
-ProgressResult ProgressDialog::Poll(
-   unsigned long long numerator, unsigned long long denominator,
-   const TranslatableString& message)
-{
-   return Update(numerator, denominator, message);
-}
-
 //
 // Update the time and, optionally, the message
 //
@@ -1529,9 +1517,8 @@ void ProgressDialog::SetMessage(const TranslatableString & message)
       wxClientDC dc(mMessage);
       dc.GetMultiLineTextExtent(message.Translation(), &w, &h);
 
-      auto sizeUpdated = false;
-      const auto currentSize = GetClientSize();
-      auto ds = currentSize;
+      bool sizeUpdated = false;
+      wxSize ds = GetClientSize();
 
       // TODO: make the following work in case of message tables
       if (w > mLastW)
@@ -1558,7 +1545,6 @@ void ProgressDialog::SetMessage(const TranslatableString & message)
          // to the existing dimensions.
          ds.x = wxMax(wxMax(ds.x, mLastW), wxMax(ds.y, mLastH));
          SetClientSize(ds);
-         SetPosition(GetPosition() - (ds - currentSize) / 2);
          wxDialogWrapper::Update();
       }
    }

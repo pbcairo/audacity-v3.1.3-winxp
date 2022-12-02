@@ -17,7 +17,6 @@ modelled on BuiltinEffectsModule
 #include "LoadCommands.h"
 #include "AudacityCommand.h"
 #include "ModuleManager.h"
-#include "PluginInterface.h"
 
 #include "Prefs.h"
 
@@ -53,17 +52,17 @@ void BuiltinCommandsModule::DoRegistration(
 // When the module is builtin to Audacity, we use the same function, but it is
 // declared static so as not to clash with other builtin modules.
 // ============================================================================
-DECLARE_PROVIDER_ENTRY(AudacityModule)
+DECLARE_MODULE_ENTRY(AudacityModule)
 {
    // Create and register the importer
    // Trust the module manager not to leak this
-   return std::make_unique<BuiltinCommandsModule>();
+   return safenew BuiltinCommandsModule();
 }
 
 // ============================================================================
 // Register this as a builtin module
 // ============================================================================
-DECLARE_BUILTIN_PROVIDER(BuiltinsCommandBuiltin);
+DECLARE_BUILTIN_MODULE(BuiltinsCommandBuiltin);
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -83,34 +82,34 @@ BuiltinCommandsModule::~BuiltinCommandsModule()
 // ComponentInterface implementation
 // ============================================================================
 
-PluginPath BuiltinCommandsModule::GetPath() const
+PluginPath BuiltinCommandsModule::GetPath()
 {
    return {};
 }
 
-ComponentInterfaceSymbol BuiltinCommandsModule::GetSymbol() const
+ComponentInterfaceSymbol BuiltinCommandsModule::GetSymbol()
 {
    return XO("Builtin Commands");
 }
 
-VendorSymbol BuiltinCommandsModule::GetVendor() const
+VendorSymbol BuiltinCommandsModule::GetVendor()
 {
    return XO("The Audacity Team");
 }
 
-wxString BuiltinCommandsModule::GetVersion() const
+wxString BuiltinCommandsModule::GetVersion()
 {
    // This "may" be different if this were to be maintained as a separate DLL
    return AUDACITY_VERSION_STRING;
 }
 
-TranslatableString BuiltinCommandsModule::GetDescription() const
+TranslatableString BuiltinCommandsModule::GetDescription()
 {
    return XO("Provides builtin commands to Audacity");
 }
 
 // ============================================================================
-// PluginProvider implementation
+// ModuleInterface implementation
 // ============================================================================
 
 bool BuiltinCommandsModule::Initialize()
@@ -142,7 +141,7 @@ const FileExtensions &BuiltinCommandsModule::GetFileExtensions()
    return empty;
 }
 
-void BuiltinCommandsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
+bool BuiltinCommandsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
 {
    TranslatableString ignoredErrMsg;
    for (const auto &pair : mCommands)
@@ -157,11 +156,13 @@ void BuiltinCommandsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
             PluginManagerInterface::AudacityCommandRegistrationCallback);
       }
    }
+
+   // We still want to be called during the normal registration process
+   return false;
 }
 
-PluginPaths BuiltinCommandsModule::FindModulePaths(PluginManagerInterface &)
+PluginPaths BuiltinCommandsModule::FindPluginPaths(PluginManagerInterface & WXUNUSED(pm))
 {
-   // Not really libraries
    PluginPaths names;
    for ( const auto &pair : mCommands )
       names.push_back( pair.first );
@@ -172,7 +173,6 @@ unsigned BuiltinCommandsModule::DiscoverPluginsAtPath(
    const PluginPath & path, TranslatableString &errMsg,
    const RegistrationCallback &callback)
 {
-   // At most one
    errMsg = {};
    auto Command = Instantiate(path);
    if (Command)
@@ -187,16 +187,18 @@ unsigned BuiltinCommandsModule::DiscoverPluginsAtPath(
    return 0;
 }
 
+bool BuiltinCommandsModule::IsPluginValid(const PluginPath & path, bool bFast)
+{
+   // bFast is unused as checking in the list is fast.
+   static_cast<void>(bFast); // avoid unused variable warning
+   return mCommands.find( path ) != mCommands.end();
+}
+
 std::unique_ptr<ComponentInterface>
-BuiltinCommandsModule::LoadPlugin(const PluginPath & path)
+BuiltinCommandsModule::CreateInstance(const PluginPath & path)
 {
    // Acquires a resource for the application.
    return Instantiate(path);
-}
-
-bool BuiltinCommandsModule::CheckPluginExist(const PluginPath& path) const
-{
-   return mCommands.find( path ) != mCommands.end();
 }
 
 // ============================================================================

@@ -17,7 +17,6 @@
 #include "ClientData.h"
 #include "CommandFunctors.h"
 #include "CommandFlag.h"
-#include "GlobalVariable.h"
 
 #include "Keyboard.h"
 
@@ -30,7 +29,6 @@
 
 #include <unordered_map>
 
-class wxEvent;
 class wxMenu;
 class wxMenuBar;
 using CommandParameter = CommandID;
@@ -63,11 +61,12 @@ class AUDACITY_DLL_API CommandManager final
    static CommandManager &Get( AudacityProject &project );
    static const CommandManager &Get( const AudacityProject &project );
 
-   // Interception of menu item handling.
-   // If it returns true, bypass the usual dispatch of commands.
-   struct AUDACITY_DLL_API GlobalMenuHook : GlobalHook<GlobalMenuHook,
-      bool(const CommandID&)
-   >{};
+   // Type of a function that can intercept menu item handling.
+   // If it returns true, bypass the usual dipatch of commands.
+   using MenuHook = std::function< bool(const CommandID&) >;
+
+   // install a menu hook, returning the previously installed one
+   static MenuHook SetMenuHook( const MenuHook &hook );
 
    //
    // Constructor / Destructor

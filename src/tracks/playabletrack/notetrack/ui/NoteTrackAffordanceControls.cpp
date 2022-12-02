@@ -19,7 +19,6 @@
 #include "AColor.h"
 #include "../../../../NoteTrack.h"
 #include "ViewInfo.h"
-#include "../../../../TrackArt.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelMouseEvent.h"
 #include "../../../../TrackPanelDrawingContext.h"
@@ -27,7 +26,7 @@
 #include "../lib-src/header-substitutes/allegro.h"
 
 
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../SelectionState.h"
 #include "../../../../ProjectSettings.h"
 #include "../../../../RefreshCode.h"
@@ -92,8 +91,7 @@ std::vector<UIHandlePtr> NoteTrackAffordanceControls::HitTest(const TrackPanelMo
     {
         results.push_back(
             SelectHandle::HitTest(
-                mSelectHandle, state, pProject,
-                TrackView::Get(*track).shared_from_this()
+                mSelectHandle, state, pProject, std::static_pointer_cast<TrackView>(track->GetTrackView())
             )
         );
     }

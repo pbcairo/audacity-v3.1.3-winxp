@@ -19,7 +19,6 @@ effect that uses SBSMS to do its processing (TimeScale)
 #include <math.h>
 
 #include "../LabelTrack.h"
-#include "../SyncLock.h"
 #include "../WaveClip.h"
 #include "../WaveTrack.h"
 #include "TimeWarper.h"
@@ -210,7 +209,7 @@ double EffectSBSMS::getRate(double rateStart, double rateEnd, SlideType slideTyp
    return slide.getRate(t);
 }
 
-bool EffectSBSMS::Process(EffectInstance &, EffectSettings &)
+bool EffectSBSMS::Process()
 {
    bool bGoodResult = true;
 
@@ -229,8 +228,7 @@ bool EffectSBSMS::Process(EffectInstance &, EffectSettings &)
 
    mOutputTracks->Leaders().VisitWhile( bGoodResult,
       [&](LabelTrack *lt, const Track::Fallthrough &fallthrough) {
-         if (!(lt->GetSelected() ||
-               (mustSync && SyncLock::IsSyncLockSelected(lt))))
+         if (!(lt->GetSelected() || (mustSync && lt->IsSyncLockSelected())))
             return fallthrough();
          if (!ProcessLabelTrack(lt))
             bGoodResult = false;
@@ -415,7 +413,7 @@ bool EffectSBSMS::Process(EffectInstance &, EffectSettings &)
          mCurTrackNum++;
       },
       [&](Track *t) {
-         if (mustSync && SyncLock::IsSyncLockSelected(t))
+         if (mustSync && t->IsSyncLockSelected())
          {
             t->SyncLockAdjust(mCurT1, mCurT0 + (mCurT1 - mCurT0) * mTotalStretch);
          }

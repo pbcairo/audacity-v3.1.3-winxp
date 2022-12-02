@@ -56,12 +56,12 @@ WaveformPrefs::~WaveformPrefs()
 {
 }
 
-ComponentInterfaceSymbol WaveformPrefs::GetSymbol() const
+ComponentInterfaceSymbol WaveformPrefs::GetSymbol()
 {
    return WAVEFORM_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString WaveformPrefs::GetDescription() const
+TranslatableString WaveformPrefs::GetDescription()
 {
    return XO("Preferences for Waveforms");
 }

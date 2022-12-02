@@ -2,7 +2,7 @@
 
    Audacity: A Digital Audio Editor
    Audacity(R) is copyright (c) 1999-2013 Audacity Team.
-   License: GPL v2 or later.  See License.txt.
+   License: GPL v2.  See License.txt.
 
   ChangePitch.cpp
   Vaughan Johnson, Dominic Mazzoni, Steve Daulton
@@ -36,6 +36,7 @@ the pitch without changing the tempo.
 #include <wx/valtext.h>
 
 #include "../PitchName.h"
+#include "../Shuttle.h"
 #include "../ShuttleGui.h"
 #include "Spectrum.h"
 #include "../WaveTrack.h"
@@ -69,23 +70,11 @@ enum {
 
 // Soundtouch is not reasonable below -99% or above 3000%.
 
-const EffectParameterMethods& EffectChangePitch::Parameters() const
-{
-   static CapturedParameters<EffectChangePitch,
-      // Vaughan, 2013-06: Long lost to history, I don't see why m_dPercentChange was chosen to be shuttled.
-      // Only m_dSemitonesChange is used in Process().
-      // PRL 2022: but that is so only when USE_SBSMS is not defined
-      Percentage, UseSBSMS
-   > parameters{
-      [](EffectChangePitch &, EffectSettings &,
-         EffectChangePitch &e, bool updating){
-         if (updating)
-            e.Calc_SemitonesChange_fromPercentChange();
-         return true;
-      },
-   };
-   return parameters;
-}
+// Define keys, defaults, minimums, and maximums for the effect parameters
+//
+//     Name          Type     Key               Def   Min      Max      Scale
+Param( Percentage,   double,  wxT("Percentage"), 0.0,  -99.0,   3000.0,  1  );
+Param( UseSBSMS,     bool,    wxT("SBSMS"),     false, false,   true,    1  );
 
 // We warp the slider to go up to 400%, but user can enter up to 3000%
 static const double kSliderMax = 100.0;          // warped above zero to actually go up to 400%
@@ -115,13 +104,16 @@ END_EVENT_TABLE()
 
 EffectChangePitch::EffectChangePitch()
 {
-   // mUseSBSMS always defaults to false and its value is used only if USE_SBSMS
-   // is defined
-   Parameters().Reset(*this);
-
+   m_dPercentChange = DEF_Percentage;
    m_dSemitonesChange = 0.0;
    m_dStartFrequency = 0.0; // 0.0 => uninitialized
    m_bLoopDetect = false;
+
+#if USE_SBSMS
+   mUseSBSMS = DEF_UseSBSMS;
+#else
+   mUseSBSMS = false;
+#endif
 
    // NULL out these control members because there are some cases where the
    // event table handlers get called during this method, and those handlers that
@@ -148,45 +140,77 @@ EffectChangePitch::~EffectChangePitch()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectChangePitch::GetSymbol() const
+ComponentInterfaceSymbol EffectChangePitch::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectChangePitch::GetDescription() const
+TranslatableString EffectChangePitch::GetDescription()
 {
    return XO("Changes the pitch of a track without changing its tempo");
 }
 
-ManualPageID EffectChangePitch::ManualPage() const
+ManualPageID EffectChangePitch::ManualPage()
 {
    return L"Change_Pitch";
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectChangePitch::GetType() const
+EffectType EffectChangePitch::GetType()
 {
    return EffectTypeProcess;
 }
 
-OptionalMessage EffectChangePitch::LoadFactoryDefaults(EffectSettings &settings) const
-{
-   // To do: externalize state so const_cast isn't needed
-   return const_cast<EffectChangePitch&>(*this).DoLoadFactoryDefaults(settings);
+// EffectClientInterface implementation
+bool EffectChangePitch::DefineParams( ShuttleParams & S ){
+   S.SHUTTLE_PARAM( m_dPercentChange, Percentage );
+   S.SHUTTLE_PARAM( mUseSBSMS, UseSBSMS );
+   return true;
 }
 
-OptionalMessage
-EffectChangePitch::DoLoadFactoryDefaults(EffectSettings &settings)
+bool EffectChangePitch::GetAutomationParameters(CommandParameters & parms)
+{
+   parms.Write(KEY_Percentage, m_dPercentChange);
+   parms.Write(KEY_UseSBSMS, mUseSBSMS);
+
+   return true;
+}
+
+bool EffectChangePitch::SetAutomationParameters(CommandParameters & parms)
+{
+   // Vaughan, 2013-06: Long lost to history, I don't see why m_dPercentChange was chosen to be shuttled.
+   // Only m_dSemitonesChange is used in Process().
+   ReadAndVerifyDouble(Percentage);
+
+   m_dPercentChange = Percentage;
+   Calc_SemitonesChange_fromPercentChange();
+
+#if USE_SBSMS
+   ReadAndVerifyBool(UseSBSMS);
+   mUseSBSMS = UseSBSMS;
+#else
+   mUseSBSMS = false;
+#endif
+
+   return true;
+}
+
+bool EffectChangePitch::LoadFactoryDefaults()
 {
    DeduceFrequencies();
 
-   return Effect::LoadFactoryDefaults(settings);
+   return Effect::LoadFactoryDefaults();
 }
 
 // Effect implementation
 
-bool EffectChangePitch::Process(EffectInstance &, EffectSettings &settings)
+bool EffectChangePitch::Init()
+{
+   return true;
+}
+
+bool EffectChangePitch::Process()
 {
 #if USE_SBSMS
    if (mUseSBSMS)
@@ -195,8 +219,8 @@ bool EffectChangePitch::Process(EffectInstance &, EffectSettings &settings)
       EffectSBSMS proxy;
       proxy.mProxyEffectName = XO("High Quality Pitch Change");
       proxy.setParameters(1.0, pitchRatio);
-      //! Already processing; don't make a dialog
-      return Delegate(proxy, settings);
+
+      return Delegate(proxy, *mUIParent, nullptr);
    }
    else
 #endif
@@ -227,14 +251,12 @@ bool EffectChangePitch::Process(EffectInstance &, EffectSettings &settings)
    }
 }
 
-bool EffectChangePitch::CheckWhetherSkipEffect(const EffectSettings &) const
+bool EffectChangePitch::CheckWhetherSkipEffect()
 {
    return (m_dPercentChange == 0.0);
 }
 
-std::unique_ptr<EffectUIValidator> EffectChangePitch::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &,
-   const EffectOutputs *)
+void EffectChangePitch::PopulateOrExchange(ShuttleGui & S)
 {
    DeduceFrequencies(); // Set frequency-related control values based on sample.
 
@@ -332,8 +354,9 @@ std::unique_ptr<EffectUIValidator> EffectChangePitch::PopulateOrExchange(
                .Validator<FloatingPointValidator<double>>(
                   3, &m_dPercentChange,
                   NumValidatorStyle::THREE_TRAILING_ZEROES,
-                  Percentage.min, Percentage.max )
-               .AddTextBox(XXO("Percent C&hange:"), L"", 12);
+                  MIN_Percentage, MAX_Percentage
+               )
+               .AddTextBox(XXO("Percent C&hange:"), wxT(""), 12);
          }
          S.EndHorizontalLay();
 
@@ -342,7 +365,7 @@ std::unique_ptr<EffectUIValidator> EffectChangePitch::PopulateOrExchange(
             m_pSlider_PercentChange = S.Id(ID_PercentChange)
                .Name(XO("Percent Change"))
                .Style(wxSL_HORIZONTAL)
-               .AddSlider( {}, 0, (int)kSliderMax, (int)Percentage.min);
+               .AddSlider( {}, 0, (int)kSliderMax, (int)MIN_Percentage);
          }
          S.EndHorizontalLay();
       }
@@ -360,10 +383,10 @@ std::unique_ptr<EffectUIValidator> EffectChangePitch::PopulateOrExchange(
 
    }
    S.EndVerticalLay();
-   return nullptr;
+   return;
 }
 
-bool EffectChangePitch::TransferDataToWindow(const EffectSettings &)
+bool EffectChangePitch::TransferDataToWindow()
 {
    m_bLoopDetect = true;
 
@@ -392,7 +415,7 @@ bool EffectChangePitch::TransferDataToWindow(const EffectSettings &)
    return true;
 }
 
-bool EffectChangePitch::TransferDataFromWindow(EffectSettings &)
+bool EffectChangePitch::TransferDataFromWindow()
 {
    if (!mUIParent->Validate() || !mUIParent->TransferDataFromWindow())
    {
@@ -720,7 +743,7 @@ void EffectChangePitch::OnText_ToFrequency(wxCommandEvent & WXUNUSED(evt))
    // Success. Make sure OK and Preview are disabled if percent change is out of bounds.
    // Can happen while editing.
    // If the value is good, might also need to re-enable because of above clause.
-   bool bIsGoodValue = (m_dPercentChange > Percentage.min) && (m_dPercentChange <= Percentage.max);
+   bool bIsGoodValue = (m_dPercentChange > MIN_Percentage) && (m_dPercentChange <= MAX_Percentage);
    EnableApply(bIsGoodValue);
 }
 

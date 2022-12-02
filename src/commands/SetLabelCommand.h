@@ -26,11 +26,9 @@ public:
 
    SetLabelCommand();
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override {return Symbol;};
-   TranslatableString GetDescription() const override {return XO("Sets various values for a label.");};
-   template<bool Const> bool VisitSettings( SettingsVisitorBase<Const> &S );
-   bool VisitSettings( SettingsVisitor & S ) override;
-   bool VisitSettings( ConstSettingsVisitor & S ) override;
+   ComponentInterfaceSymbol GetSymbol() override {return Symbol;};
+   TranslatableString GetDescription() override {return XO("Sets various values for a label.");};
+   bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
 
    // AudacityCommand overrides

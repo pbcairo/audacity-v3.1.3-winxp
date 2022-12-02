@@ -11,17 +11,18 @@ Paul Licameli split from TrackPanel.cpp
 #ifndef __AUDACITY_PLAY_INDICATOR_OVERLAY__
 #define __AUDACITY_PLAY_INDICATOR_OVERLAY__
 
+#include <wx/event.h> // to inherit
 #include <memory>
 #include "ClientData.h"
 #include "../../widgets/Overlay.h" // to inherit
-#include "Observer.h"
 
 class AudacityProject;
 
 
 // Common class for overlaying track panel or ruler
 class PlayIndicatorOverlayBase
-   : public Overlay
+   : public wxEvtHandler
+   , public Overlay
    , public ClientData::Base
 {
 public:
@@ -53,10 +54,9 @@ public:
    PlayIndicatorOverlay(AudacityProject *project);
 
 private:
-   void OnTimer(Observer::Message);
+   void OnTimer(wxCommandEvent &event);
 
    std::shared_ptr<PlayIndicatorOverlayBase> mPartner;
-   Observer::Subscription mSubscription;
 };
 
 #endif

@@ -27,12 +27,12 @@ Joshua Haberman
 
 #include "float_cast.h"
 #include "ProjectRate.h"
-#include "Mix.h"
+#include "../Mix.h"
 #include "Prefs.h"
 #include "../ShuttleGui.h"
 
 #include "../Tags.h"
-#include "Track.h"
+#include "../Track.h"
 
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/ProgressDialog.h"
@@ -209,7 +209,7 @@ public:
 
    void OptionsCreate(ShuttleGui &S, int format) override;
    ProgressResult Export(AudacityProject *project,
-               std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+               std::unique_ptr<ProgressDialog> &pDialog,
                unsigned channels,
                const wxFileNameWrapper &fName,
                bool selectedOnly,
@@ -241,7 +241,7 @@ ExportFLAC::ExportFLAC()
 }
 
 ProgressResult ExportFLAC::Export(AudacityProject *project,
-                        std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+                        std::unique_ptr<ProgressDialog> &pDialog,
                         unsigned numChannels,
                         const wxFileNameWrapper &fName,
                         bool selectionOnly,
@@ -380,9 +380,10 @@ ProgressResult ExportFLAC::Export(AudacityProject *project,
    auto &progress = *pDialog;
 
    while (updateResult == ProgressResult::Success) {
-      auto samplesThisRun = mixer->Process();
-      if (samplesThisRun == 0) //stop encoding
+      auto samplesThisRun = mixer->Process(SAMPLES_PER_RUN);
+      if (samplesThisRun == 0) { //stop encoding
          break;
+      }
       else {
          for (size_t i = 0; i < numChannels; i++) {
             auto mixed = mixer->GetBuffer(i);
@@ -407,7 +408,7 @@ ProgressResult ExportFLAC::Export(AudacityProject *project,
          }
          if (updateResult == ProgressResult::Success)
             updateResult =
-               progress.Poll(mixer->MixGetCurrentTime() - t0, t1 - t0);
+               progress.Update(mixer->MixGetCurrentTime() - t0, t1 - t0);
       }
    }
 
@@ -482,36 +483,6 @@ bool ExportFLAC::GetMetadata(AudacityProject *project, const Tags *tags)
 static Exporter::RegisteredExportPlugin sRegisteredPlugin{ "FLAC",
    []{ return std::make_unique< ExportFLAC >(); }
 };
-
-#ifdef HAS_CLOUD_UPLOAD
-#include "CloudExporterPlugin.h"
-#include "CloudExportersRegistry.h"
-
-class FlacCloudHelper : public cloud::CloudExporterPlugin
-{
-public:
-   wxString GetExporterID() const override
-   {
-      return "FLAC";
-   }
-
-   FileExtension GetFileExtension() const override
-   {
-      return "flac";
-   }
-
-   void OnBeforeExport() override
-   {
-      FLACBitDepth.Write("24");
-      FLACLevel.Write("5");
-   }
-
-}; // WavPackCloudHelper
-
-static bool cloudExporterRegisterd = cloud::RegisterCloudExporter(
-   "audio/x-flac",
-   [](const AudacityProject&) { return std::make_unique<FlacCloudHelper>(); });
-#endif
 
 #endif // USE_LIBFLAC
 

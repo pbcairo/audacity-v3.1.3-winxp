@@ -48,26 +48,29 @@
 #endif
 
 #include "AllThemeResources.h"
+#include "../BatchCommands.h"
 #include "ImageManipulation.h"
 #include "../Menus.h"
 #include "Prefs.h"
 #include "Project.h"
-#include "UndoManager.h"
+#include "../UndoManager.h"
 #include "../widgets/AButton.h"
 
 #include "../commands/CommandContext.h"
 #include "../commands/CommandManager.h"
-#include "../commands/CommandDispatch.h"
 
 IMPLEMENT_CLASS(EditToolBar, ToolBar);
+
+const int BUTTON_WIDTH = 27;
+const int SEPARATOR_WIDTH = 14;
 
 ////////////////////////////////////////////////////////////
 /// Methods for EditToolBar
 ////////////////////////////////////////////////////////////
 
 BEGIN_EVENT_TABLE( EditToolBar, ToolBar )
-   EVT_COMMAND_RANGE(ETBZoomInID+first_ETB_ID,
-                      ETBZoomInID+first_ETB_ID + ETBNumButtons - 1,
+   EVT_COMMAND_RANGE( ETBCutID+first_ETB_ID,
+                      ETBCutID+first_ETB_ID + ETBNumButtons - 1,
                       wxEVT_COMMAND_BUTTON_CLICKED,
                       EditToolBar::OnButton )
 END_EVENT_TABLE()
@@ -90,7 +93,7 @@ void EditToolBar::Create(wxWindow * parent)
 
 void EditToolBar::AddSeparator()
 {
-   mToolSizer->AddSpacer(0);
+   AddSpacer();
 }
 
 /// This is a convenience function that allows for button creation in
@@ -114,7 +117,10 @@ AButton *EditToolBar::AddButton(
       theTheme.ImageSize( bmpRecoloredUpSmall ));
 
    r->SetLabel(label);
-   pBar->mToolSizer->Add(r);
+// JKC: Unlike ControlToolBar, does not have a focus rect.  Shouldn't it?
+// r->SetFocusRect( r->GetRect().Deflate( 4, 4 ) );
+
+   pBar->Add( r, 0, wxALIGN_CENTER );
 
    return r;
 }
@@ -124,9 +130,35 @@ void EditToolBar::Populate()
    SetBackgroundColour( theTheme.Colour( clrMedium  ) );
    MakeButtonBackgroundsSmall();
 
-   Add(mToolSizer = safenew wxGridSizer(2, 5, 1, 1));
-
    /* Buttons */
+   // Tooltips slightly more verbose than the menu entries are.
+   AddButton(this, bmpCut, bmpCut, bmpCutDisabled, ETBCutID,
+      XO("Cut selection"));
+   AddButton(this, bmpCopy, bmpCopy, bmpCopyDisabled, ETBCopyID,
+      XO("Copy selection"));
+   AddButton(this, bmpPaste, bmpPaste, bmpPasteDisabled, ETBPasteID,
+      XO("Paste"));
+   AddButton(this, bmpTrim, bmpTrim, bmpTrimDisabled, ETBTrimID,
+      XO("Trim audio outside selection"));
+   AddButton(this, bmpSilence, bmpSilence, bmpSilenceDisabled, ETBSilenceID,
+      XO("Silence audio selection"));
+
+   AddSeparator();
+
+   AddButton(this, bmpUndo, bmpUndo, bmpUndoDisabled, ETBUndoID,
+      XO("Undo"));
+   AddButton(this, bmpRedo, bmpRedo, bmpRedoDisabled, ETBRedoID,
+      XO("Redo"));
+
+   AddSeparator();
+
+#ifdef OPTION_SYNC_LOCK_BUTTON
+   AddButton(this, bmpSyncLockTracksUp, bmpSyncLockTracksDown, bmpSyncLockTracksUp, ETBSyncLockID,
+               XO("Sync-Lock Tracks"), true);
+
+   AddSeparator();
+#endif
+
    // Tooltips match menu entries.
    // We previously had longer tooltips which were not more clear.
    AddButton(this, bmpZoomIn, bmpZoomIn, bmpZoomInDisabled, ETBZoomInID,
@@ -143,23 +175,7 @@ void EditToolBar::Populate()
       XO("Zoom Toggle"));
 #endif
 
-   // Tooltips slightly more verbose than the menu entries are.
-   AddButton(this, bmpTrim, bmpTrim, bmpTrimDisabled, ETBTrimID,
-      XO("Trim audio outside selection"));
-   AddButton(this, bmpSilence, bmpSilence, bmpSilenceDisabled, ETBSilenceID,
-      XO("Silence audio selection"));
 
-#ifdef OPTION_SYNC_LOCK_BUTTON
-   AddButton(this, bmpSyncLockTracksUp, bmpSyncLockTracksDown, bmpSyncLockTracksUp, ETBSyncLockID,
-      XO("Sync-Lock Tracks"), true);
-#else
-   AddSeparator();
-#endif
-
-   AddButton(this, bmpUndo, bmpUndo, bmpUndoDisabled, ETBUndoID,
-      XO("Undo"));
-   AddButton(this, bmpRedo, bmpRedo, bmpRedoDisabled, ETBRedoID,
-      XO("Redo"));
 
    mButtons[ETBZoomInID]->SetEnabled(false);
    mButtons[ETBZoomOutID]->SetEnabled(false);
@@ -169,9 +185,16 @@ void EditToolBar::Populate()
 
    mButtons[ETBZoomSelID]->SetEnabled(false);
    mButtons[ETBZoomFitID]->SetEnabled(false);
+   mButtons[ETBPasteID]->SetEnabled(false);
 
 #ifdef OPTION_SYNC_LOCK_BUTTON
    mButtons[ETBSyncLockID]->PushDown();
+#endif
+
+#if defined(EXPERIMENTAL_EFFECTS_RACK)
+   AddSeparator();
+   AddButton(this, bmpEditEffects, bmpEditEffects, bmpEditEffects, ETBEffectsID,
+      XO("Show Effects Rack"), true);
 #endif
 
    RegenerateTooltips();
@@ -204,21 +227,29 @@ static const struct Entry {
    CommandID commandName;
    TranslatableString untranslatedLabel;
 } EditToolbarButtonList[] = {
+   { ETBCutID,      wxT("Cut"),         XO("Cut")  },
+   { ETBCopyID,     wxT("Copy"),        XO("Copy")  },
+   { ETBPasteID,    wxT("Paste"),       XO("Paste")  },
+   { ETBTrimID,     wxT("Trim"),        XO("Trim audio outside selection")  },
+   { ETBSilenceID,  wxT("Silence"),     XO("Silence audio selection")  },
+   { ETBUndoID,     wxT("Undo"),        XO("Undo")  },
+   { ETBRedoID,     wxT("Redo"),        XO("Redo")  },
+
+#ifdef OPTION_SYNC_LOCK_BUTTON
+   { ETBSyncLockID, wxT("SyncLock"),    XO("Sync-Lock Tracks")  },
+#endif
+
    { ETBZoomInID,   wxT("ZoomIn"),      XO("Zoom In")  },
    { ETBZoomOutID,  wxT("ZoomOut"),     XO("Zoom Out")  },
 #ifdef EXPERIMENTAL_ZOOM_TOGGLE_BUTTON
    { ETBZoomToggleID,   wxT("ZoomToggle"),      XO("Zoom Toggle")  },
-#endif
+#endif 
    { ETBZoomSelID,  wxT("ZoomSel"),     XO("Fit selection to width")  },
    { ETBZoomFitID,  wxT("FitInWindow"), XO("Fit project to width")  },
 
-   { ETBTrimID,     wxT("Trim"),        XO("Trim audio outside selection")  },
-   { ETBSilenceID,  wxT("Silence"),     XO("Silence audio selection")  },
-#ifdef OPTION_SYNC_LOCK_BUTTON
-   { ETBSyncLockID, wxT("SyncLock"),    XO("Sync-Lock Tracks")  },
+#if defined(EXPERIMENTAL_EFFECTS_RACK)
+   { ETBEffectsID,  wxT("ShowEffectsRack"), XO("Open Effects Rack")  },
 #endif
-   { ETBUndoID,     wxT("Undo"),        XO("Undo")  },
-   { ETBRedoID,     wxT("Redo"),        XO("Redo")  },
 };
 
 
@@ -268,7 +299,7 @@ void EditToolBar::OnButton(wxCommandEvent &event)
 
    auto flags = MenuManager::Get(*p).GetUpdateFlags();
    const CommandContext context( *p );
-   ::HandleTextualCommand( cm,
+   MacroCommands::HandleTextualCommand( cm,
       EditToolbarButtonList[id].commandName, context, flags, false);
 
 #if defined(__WXMAC__)

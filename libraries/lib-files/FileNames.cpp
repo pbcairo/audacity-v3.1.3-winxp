@@ -30,7 +30,6 @@ used throughout Audacity into this one place.
 #include <wx/filename.h>
 #include <wx/intl.h>
 #include <wx/stdpaths.h>
-#include <wx/utils.h>
 #include "BasicUI.h"
 #include "Prefs.h"
 #include "Internat.h"
@@ -45,6 +44,8 @@ used throughout Audacity into this one place.
 #if defined(__WXMSW__)
 #include <windows.h>
 #endif
+
+static wxString gDataDir;
 
 const FileNames::FileType
      FileNames::AllFiles{ XO("All files"), { wxT("") } }
@@ -223,67 +224,13 @@ wxString FileNames::LowerCaseAppNameInPath( const wxString & dirIn){
    return dir;
 }
 
-namespace // Implementation for user directories
+FilePath FileNames::DataDir()
 {
-enum class DirTarget
-{
-   Cache,
-   Config,
-   Data,
-   State,
-   _targetCount,
-};
-
-static FilePath gTargetDirs[size_t(DirTarget::_targetCount)] = {};
-
-#if defined(__WXGTK__)
-struct XDGDirConfig final
-{
-   wxString dirEnvVar;
-   FilePath dirDefault;
-};
-
-const XDGDirConfig gXDGUnixDirs[] = {
-   {wxT("XDG_CACHE_HOME"),  wxT("/.cache")      },
-   {wxT("XDG_CONFIG_HOME"), wxT("/.config")     },
-   {wxT("XDG_DATA_HOME"),   wxT("/.local/share")},
-   {wxT("XDG_STATE_HOME"),  wxT("/.local/state")}
-};
-
-static_assert(
-   sizeof(gXDGUnixDirs) / sizeof(*gXDGUnixDirs) == size_t(DirTarget::_targetCount),
-   "Not all DirTarget cases were implemented!"
-);
-
-FilePath GetXDGTargetDir(DirTarget target)
-{
-   static const auto oldUnixDataDir = wxFileName::GetHomeDir() + wxT("/.audacity-data");
-   static const auto oldUnixDataDirExists = wxDirExists(oldUnixDataDir);
-   // Compatibility: Use old user data dir folder, if it already exists
-   if (oldUnixDataDirExists)
-      return oldUnixDataDir;
-
-   // see if the XDG_*_HOME env var is defined. if it is, use its value.
-   // if it isn't, use the default XDG-specified value.
-   wxString newDir;
-   const auto [dirEnvVar, dirDefault] = gXDGUnixDirs[size_t(target)];
-   if (!wxGetEnv(dirEnvVar, &newDir) || newDir.empty())
-      newDir = wxFileName::GetHomeDir() + dirDefault;
-
-#ifdef AUDACITY_NAME
-   newDir = newDir + wxT("/" AUDACITY_NAME);
-#else
-   newDir = newDir + wxT("/audacity");
-#endif
-
-   return newDir;
-}
-#endif
-
-FilePath GetUserTargetDir(DirTarget target, bool allowRoaming)
-{
-   auto& dir = gTargetDirs[size_t(target)];
-   if (dir.empty())
+   // LLL:  Wouldn't you know that as of WX 2.6.2, there is a conflict
+   //       between wxStandardPaths and wxConfig under Linux.  The latter
+   //       creates a normal file as "$HOME/.audacity", while the former
+   //       expects the ".audacity" portion to be a directory.
+   if (gDataDir.empty())
    {
       // If there is a directory "Portable Settings" relative to the
       // executable's EXE file, the prefs are stored in there, otherwise
@@ -301,36 +248,22 @@ FilePath GetUserTargetDir(DirTarget target, bool allowRoaming)
       if (::wxDirExists(portablePrefsPath.GetFullPath()))
       {
          // Use "Portable Settings" folder
-         dir = portablePrefsPath.GetFullPath();
+         gDataDir = portablePrefsPath.GetFullPath();
       } else
       {
-#if defined(__WXGTK__)
-         // Use XDG Base Directory compliant folders
-         wxString newDir(GetXDGTargetDir(target));
-#else
          // Use OS-provided user data dir folder
-         wxString newDir(FileNames::LowerCaseAppNameInPath(
-            allowRoaming ? wxStandardPaths::Get().GetUserDataDir() :
-                           wxStandardPaths::Get().GetUserLocalDataDir()));
+         wxString dataDir( LowerCaseAppNameInPath( wxStandardPaths::Get().GetUserDataDir() ));
+#if defined( __WXGTK__ )
+         dataDir = dataDir + wxT("-data");
 #endif
-         dir = FileNames::MkDir(newDir);
+         gDataDir = FileNames::MkDir(dataDir);
       }
    }
-   return dir;
+   return gDataDir;
 }
-} // End of implementation for user directories
-
-FilePath FileNames::CacheDir() { return GetUserTargetDir(DirTarget::Cache, false); }
-FilePath FileNames::ConfigDir() { return GetUserTargetDir(DirTarget::Config, true); }
-FilePath FileNames::DataDir() { return GetUserTargetDir(DirTarget::Data, true); }
-FilePath FileNames::StateDir() { return GetUserTargetDir(DirTarget::State, false); }
 
 FilePath FileNames::ResourcesDir(){
-#if __WXMSW__
-   static auto resourcesDir = wxFileName(wxStandardPaths::Get().GetExecutablePath()).GetPath();
-#else
-   static auto resourcesDir = LowerCaseAppNameInPath(wxStandardPaths::Get().GetResourcesDir());
-#endif
+   wxString resourcesDir( LowerCaseAppNameInPath( wxStandardPaths::Get().GetResourcesDir() ));
    return resourcesDir;
 }
 
@@ -380,19 +313,14 @@ FilePath FileNames::PlugInDir()
    return FileNames::MkDir( wxFileName( DataDir(), wxT("Plug-Ins") ).GetFullPath() );
 }
 
-FilePath FileNames::Configuration()
-{
-   return wxFileName( ConfigDir(), wxT("audacity.cfg") ).GetFullPath();
-}
-
 FilePath FileNames::PluginRegistry()
 {
-   return wxFileName( ConfigDir(), wxT("pluginregistry.cfg") ).GetFullPath();
+   return wxFileName( DataDir(), wxT("pluginregistry.cfg") ).GetFullPath();
 }
 
 FilePath FileNames::PluginSettings()
 {
-   return wxFileName( ConfigDir(), wxT("pluginsettings.cfg") ).GetFullPath();
+   return wxFileName( DataDir(), wxT("pluginsettings.cfg") ).GetFullPath();
 }
 
 FilePath FileNames::BaseDir()
@@ -426,6 +354,46 @@ FilePath FileNames::ModulesDir()
    modulesDir.AppendDir(wxT("modules"));
 
    return modulesDir.GetFullPath();
+}
+
+FilePath FileNames::ThemeDir()
+{
+   return FileNames::MkDir( wxFileName( DataDir(), wxT("Theme") ).GetFullPath() );
+}
+
+FilePath FileNames::ThemeComponentsDir()
+{
+   return FileNames::MkDir( wxFileName( ThemeDir(), wxT("Components") ).GetFullPath() );
+}
+
+FilePath FileNames::ThemeCachePng()
+{
+   return wxFileName( ThemeDir(), wxT("ImageCache.png") ).GetFullPath();
+}
+
+FilePath FileNames::ThemeCacheHtm()
+{
+   return wxFileName( ThemeDir(), wxT("ImageCache.htm") ).GetFullPath();
+}
+
+FilePath FileNames::ThemeImageDefsAsCee()
+{
+   return wxFileName( ThemeDir(), wxT("ThemeImageDefsAsCee.h") ).GetFullPath();
+}
+
+FilePath FileNames::ThemeCacheAsCee( )
+{
+// DA: Theme sourcery file name.
+#ifndef EXPERIMENTAL_DA
+   return wxFileName( ThemeDir(), wxT("ThemeAsCeeCode.h") ).GetFullPath();
+#else
+   return wxFileName( ThemeDir(), wxT("DarkThemeAsCeeCode.h") ).GetFullPath();
+#endif
+}
+
+FilePath FileNames::ThemeComponent(const wxString &Str)
+{
+   return wxFileName( ThemeComponentsDir(), Str, wxT("png") ).GetFullPath();
 }
 
 //
@@ -752,7 +720,7 @@ bool FileNames::IsOnFATFileSystem(const FilePath &path)
    return fs.f_type == MSDOS_SUPER_MAGIC;
 }
 #elif defined(_WIN32)
-#include <fileapi.h>
+// #include <fileapi.h>
 bool FileNames::IsOnFATFileSystem(const FilePath &path)
 {
    wxFileNameWrapper fileName{path};

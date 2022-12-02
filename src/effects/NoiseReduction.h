@@ -15,7 +15,7 @@
 
 #include "Effect.h"
 
-class EffectNoiseReduction final : public StatefulEffect {
+class EffectNoiseReduction final : public Effect {
 public:
    static const ComponentInterfaceSymbol Symbol;
 
@@ -26,23 +26,23 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
+   EffectType GetType() override;
 
    // Effect implementation
 
 //   using Effect::TrackProgress;
 
-   int ShowHostInterface( wxWindow &parent,
-      const EffectDialogFactory &factory,
-      std::shared_ptr<EffectInstance> &pInstance, EffectSettingsAccess &access,
-      bool forceModal = false) override;
+   bool ShowInterface( wxWindow &parent,
+      const EffectDialogFactory &factory, bool forceModal = false) override;
 
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
+   bool Init() override;
+   bool CheckWhetherSkipEffect() override;
+   bool Process() override;
 
    class Settings;
    class Statistics;

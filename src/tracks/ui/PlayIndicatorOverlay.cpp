@@ -15,13 +15,12 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../AdornedRulerPanel.h"
 #include "AllThemeResources.h"
 #include "../../AudioIO.h"
-#include "../../LabelTrack.h"
 #include "Project.h"
 #include "../../ProjectAudioIO.h"
 #include "../../ProjectAudioManager.h"
 #include "../../ProjectWindow.h"
 #include "Theme.h"
-#include "Track.h"
+#include "../../Track.h"
 #include "../../TrackPanel.h"
 #include "ViewInfo.h"
 #include "Scrubbing.h"
@@ -122,7 +121,7 @@ void PlayIndicatorOverlayBase::Draw(OverlayPanel &panel, wxDC &dc)
    if(auto tp = dynamic_cast<TrackPanel*>(&panel)) {
       wxASSERT(mIsMaster);
 
-      AColor::Line(dc, mLastIndicatorX, 0, mLastIndicatorX, tp->GetSize().GetHeight());
+      AColor::Line(dc, mLastIndicatorX, tp->GetRect().GetTop(), mLastIndicatorX, tp->GetRect().GetBottom());
    }
    else if(auto ruler = dynamic_cast<AdornedRulerPanel*>(&panel)) {
       wxASSERT(!mIsMaster);
@@ -145,12 +144,17 @@ static const AudacityProject::AttachedObjects::RegisteredFactory sOverlayKey{
 PlayIndicatorOverlay::PlayIndicatorOverlay(AudacityProject *project)
 : PlayIndicatorOverlayBase(project, true)
 {
-   mSubscription = ProjectWindow::Get( *mProject )
-      .GetPlaybackScroller().Subscribe( *this, &PlayIndicatorOverlay::OnTimer );
+   ProjectWindow::Get( *mProject ).GetPlaybackScroller().Bind(
+      EVT_TRACK_PANEL_TIMER,
+      &PlayIndicatorOverlay::OnTimer,
+      this);
 }
 
-void PlayIndicatorOverlay::OnTimer(Observer::Message)
+void PlayIndicatorOverlay::OnTimer(wxCommandEvent &event)
 {
+   // Let other listeners get the notification
+   event.Skip();
+
    // Ensure that there is an overlay attached to the ruler
    if (!mPartner) {
       auto &ruler = AdornedRulerPanel::Get( *mProject );
@@ -185,9 +189,7 @@ void PlayIndicatorOverlay::OnTimer(Observer::Message)
 
       // Use a small tolerance to avoid flicker of play head pinned all the way
       // left or right
-      const auto tolerance = pinned
-         ? 1.5 * std::chrono::duration<double>{kTimerInterval}.count()
-         : 0;
+      const auto tolerance = pinned ? 1.5 * kTimerInterval / 1000.0 : 0;
       bool onScreen = playPos >= 0.0 &&
          between_incexc(viewInfo.h - tolerance,
          playPos,

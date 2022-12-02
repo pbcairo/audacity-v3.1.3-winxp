@@ -13,12 +13,10 @@
 #include "Lyrics.h"
 #include "AudioIO.h"
 #include "CommonCommandFlags.h"
-#include "LabelTrack.h"
 #include "prefs/GUISettings.h" // for RTL_WORKAROUND
 #include "Project.h"
 #include "ProjectAudioIO.h"
 #include "ProjectFileIO.h"
-#include "ProjectWindow.h"
 #include "ProjectWindows.h"
 #include "ViewInfo.h"
 
@@ -140,9 +138,9 @@ LyricsWindow::LyricsWindow(AudacityProject *parent)
    //}
 
    // Events from the project don't propagate directly to this other frame, so...
-   if (pProject)
-      mSubscription = ProjectWindow::Get( *pProject ).GetPlaybackScroller()
-         .Subscribe(*this, &LyricsWindow::OnTimer);
+   pProject->Bind(EVT_TRACK_PANEL_TIMER,
+      &LyricsWindow::OnTimer,
+      this);
    Center();
 }
 
@@ -161,7 +159,7 @@ void LyricsWindow::OnStyle_Highlight(wxCommandEvent & WXUNUSED(event))
    mLyricsPanel->SetLyricsStyle(LyricsPanel::kHighlightLyrics);
 }
 
-void LyricsWindow::OnTimer(Observer::Message)
+void LyricsWindow::OnTimer(wxCommandEvent &event)
 {
    if (auto pProject = mProject.lock()) {
       if (ProjectAudioIO::Get( *pProject ).IsAudioActive())
@@ -176,6 +174,9 @@ void LyricsWindow::OnTimer(Observer::Message)
          GetLyricsPanel()->Update(selectedRegion.t0());
       }
    }
+
+   // Let other listeners get the notification
+   event.Skip();
 }
 
 void LyricsWindow::SetWindowTitle()
@@ -232,7 +233,7 @@ CommandHandlerObject &findCommandHandler(AudacityProject &) {
 using namespace MenuTable;
 AttachedItem sAttachment{ wxT("View/Windows"),
    ( FinderScope{ findCommandHandler },
-      Command( wxT("Karaoke"), XXO("&Karaoke"), &Handler::OnKaraoke,
+      Command( wxT("Karaoke"), XXO("&Karaoke..."), &Handler::OnKaraoke,
          LabelTracksExistFlag() ) )
 };
 

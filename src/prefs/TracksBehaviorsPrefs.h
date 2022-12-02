@@ -26,8 +26,8 @@ class AUDACITY_DLL_API TracksBehaviorsPrefs final : public PrefsPanel
  public:
    TracksBehaviorsPrefs(wxWindow * parent, wxWindowID winid);
    ~TracksBehaviorsPrefs();
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    bool Commit() override;
    ManualPageID HelpPageName() override;
@@ -38,5 +38,7 @@ class AUDACITY_DLL_API TracksBehaviorsPrefs final : public PrefsPanel
 };
 
 extern AUDACITY_DLL_API ChoiceSetting TracksBehaviorsSolo;
+
+AUDACITY_DLL_API bool GetEditClipsCanMove();
 
 #endif

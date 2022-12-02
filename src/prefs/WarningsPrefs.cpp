@@ -37,12 +37,12 @@ WarningsPrefs::~WarningsPrefs()
 {
 }
 
-ComponentInterfaceSymbol WarningsPrefs::GetSymbol() const
+ComponentInterfaceSymbol WarningsPrefs::GetSymbol()
 {
    return WARNINGS_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString WarningsPrefs::GetDescription() const
+TranslatableString WarningsPrefs::GetDescription()
 {
    return XO("Preferences for Warnings");
 }

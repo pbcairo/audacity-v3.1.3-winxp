@@ -12,8 +12,6 @@ Paul Licameli split from TrackPanel.cpp
 #define __AUDACITY_NOTE_TRACK_CONTROLS__
 
 #include "../../ui/PlayableTrackControls.h" // to inherit
-#include "Observer.h"
-
 class wxEvent;
 class LWSlider;
 class NoteTrack;
@@ -66,7 +64,7 @@ public:
        wxWindow *pParent);
 
 private:
-   static void ReCreateVelocitySlider(struct ThemeChangeMessage);
+   static void ReCreateVelocitySlider( wxEvent& );
 };
 
 #endif

@@ -18,18 +18,17 @@ bool ShuttleGetDefinition::IsOptional(){
 }
 
 // Definition distinguishes optional from not.
-ConstSettingsVisitor & ShuttleGetDefinition::Optional(const bool & var){
+ShuttleParams & ShuttleGetDefinition::Optional( bool & var ){
    pOptionalFlag = &var;
    return *this;
 };
 
-ShuttleGetDefinition::ShuttleGetDefinition(CommandMessageTarget & target) : CommandMessageTargetDecorator{ target }
+ShuttleGetDefinition::ShuttleGetDefinition( CommandMessageTarget & target ) : CommandMessageTargetDecorator( target )
 {
 }
 
 // JSON definitions.
-void ShuttleGetDefinition::Define(bool, const wxChar * key,
-   bool vdefault, bool, bool, bool)
+void ShuttleGetDefinition::Define( bool & var,     const wxChar * key, const bool vdefault, const bool vmin, const bool vmax, const bool vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -41,8 +40,7 @@ void ShuttleGetDefinition::Define(bool, const wxChar * key,
    EndStruct();
 }
 
-void ShuttleGetDefinition::Define(int, const wxChar * key,
-   int vdefault, int, int, int)
+void ShuttleGetDefinition::Define( int & var,      const wxChar * key, const int vdefault, const int vmin, const int vmax, const int vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -54,8 +52,7 @@ void ShuttleGetDefinition::Define(int, const wxChar * key,
    EndStruct();
 }
 
-void ShuttleGetDefinition::Define(size_t, const wxChar * key,
-   int vdefault, int, int, int)
+void ShuttleGetDefinition::Define( size_t & var,      const wxChar * key, const int vdefault, const int vmin, const int vmax, const int vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -68,8 +65,7 @@ void ShuttleGetDefinition::Define(size_t, const wxChar * key,
    
 }
 
-void ShuttleGetDefinition::Define(float, const wxChar * key,
-   float vdefault, float, float, float)
+void ShuttleGetDefinition::Define( float & var,   const wxChar * key, const float vdefault, const float vmin, const float vmax, const float vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -81,8 +77,7 @@ void ShuttleGetDefinition::Define(float, const wxChar * key,
    EndStruct();
 }
 
-void ShuttleGetDefinition::Define(double, const wxChar * key,
-   float vdefault, float, float, float)
+void ShuttleGetDefinition::Define( double & var,   const wxChar * key, const float vdefault, const float vmin, const float vmax, const float vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -94,8 +89,7 @@ void ShuttleGetDefinition::Define(double, const wxChar * key,
    EndStruct();
 }
 
-void ShuttleGetDefinition::Define(double, const wxChar * key,
-   double vdefault, double, double, double)
+void ShuttleGetDefinition::Define( double & var,   const wxChar * key, const double vdefault, const double vmin, const double vmax, const double vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -108,8 +102,7 @@ void ShuttleGetDefinition::Define(double, const wxChar * key,
 }
 
 
-void ShuttleGetDefinition::Define(const wxString &, const wxChar * key,
-   wxString vdefault, wxString, wxString, wxString)
+void ShuttleGetDefinition::Define( wxString &var, const wxChar * key, const wxString vdefault, const wxString vmin, const wxString vmax, const wxString vscl )
 {
    StartStruct();
    AddItem( wxString(key), "key" );
@@ -122,8 +115,9 @@ void ShuttleGetDefinition::Define(const wxString &, const wxChar * key,
 }
 
 
-void ShuttleGetDefinition::DefineEnum(int, const wxChar * key,
-   int vdefault, const EnumValueSymbol strings[], size_t nStrings )
+void ShuttleGetDefinition::DefineEnum( int &var,
+                                      const wxChar * key, const int vdefault,
+                                      const EnumValueSymbol strings[], size_t nStrings )
 {
    StartStruct();
    AddItem( wxString(key), "key" );

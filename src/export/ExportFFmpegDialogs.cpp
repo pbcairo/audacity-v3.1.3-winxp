@@ -5,7 +5,7 @@
    ExportFFmpegDialogs.cpp
 
    Audacity(R) is copyright (c) 1999-2010 Audacity Team.
-   License: GPL v2 or later.  See License.txt.
+   License: GPL v2.  See License.txt.
 
    LRN
 
@@ -62,7 +62,7 @@
 
 #include "../widgets/FileDialog/FileDialog.h"
 
-#include "Mix.h"
+#include "../Mix.h"
 #include "../Tags.h"
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/HelpSystem.h"
@@ -213,8 +213,6 @@ ExportFFmpegAC3Options::~ExportFFmpegAC3Options()
 ///
 void ExportFFmpegAC3Options::PopulateOrExchange(ShuttleGui & S)
 {
-   IntSetting Setting{ L"/FileFormats/AC3BitRate", 160000 };
-
    S.StartVerticalLay();
    {
       S.StartHorizontalLay(wxCENTER);
@@ -222,7 +220,12 @@ void ExportFFmpegAC3Options::PopulateOrExchange(ShuttleGui & S)
          S.StartMultiColumn(2, wxCENTER);
          {
             S.TieNumberAsChoice(
-               XXO("Bit Rate:"), Setting, AC3BitRateNames, &AC3BitRateValues);
+               XXO("Bit Rate:"),
+               {wxT("/FileFormats/AC3BitRate"),
+                160000},
+               AC3BitRateNames,
+               &AC3BitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -280,9 +283,9 @@ void ExportFFmpegAACOptions::PopulateOrExchange(ShuttleGui & S)
          S.StartMultiColumn(2, wxCENTER);
          {
             S.SetStretchyCol(1);
-            S.TieSpinCtrl(
+            S.Prop(1).TieSlider(
                XXO("Quality (kbps):"),
-               {wxT("/FileFormats/AACQuality"), 160}, 320, 98);
+               {wxT("/FileFormats/AACQuality"), 160},320, 98);
          }
          S.EndMultiColumn();
       }
@@ -365,15 +368,19 @@ ExportFFmpegAMRNBOptions::~ExportFFmpegAMRNBOptions()
 ///
 void ExportFFmpegAMRNBOptions::PopulateOrExchange(ShuttleGui & S)
 {
-   IntSetting Setting{ L"/FileFormats/AMRNBBitRate", 12200 };
    S.StartVerticalLay();
    {
       S.StartHorizontalLay(wxCENTER);
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieNumberAsChoice(XXO("Bit Rate:"), Setting,
-               AMRNBBitRateNames, &AMRNBBitRateValues);
+            S.TieNumberAsChoice(
+               XXO("Bit Rate:"),
+               {wxT("/FileFormats/AMRNBBitRate"),
+                12200},
+               AMRNBBitRateNames,
+               &AMRNBBitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -720,15 +727,19 @@ ExportFFmpegWMAOptions::~ExportFFmpegWMAOptions()
 ///
 void ExportFFmpegWMAOptions::PopulateOrExchange(ShuttleGui & S)
 {
-   IntSetting Setting{ L"/FileFormats/WMABitRate", 128000 };
    S.StartVerticalLay();
    {
       S.StartHorizontalLay(wxCENTER);
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieNumberAsChoice(XXO("Bit Rate:"),
-               Setting, WMABitRateNames, &WMABitRateValues);
+            S.TieNumberAsChoice(
+               XXO("Bit Rate:"),
+               {wxT("/FileFormats/WMABitRate"),
+                128000},
+               WMABitRateNames,
+               &WMABitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -1592,7 +1603,7 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
 
 /// AAC profiles
 // The FF_PROFILE_* enumeration is defined in the ffmpeg library
-// PRL:  I can't find where this preference is used!
+// PRL:  I cant find where this preference is used!
 ChoiceSetting AACProfiles { wxT("/FileFormats/FFmpegAACProfile"),
    {
       {wxT("1") /*FF_PROFILE_AAC_LOW*/, XO("LC")},
@@ -1760,7 +1771,10 @@ void ExportFFmpegOptions::FetchFormatList()
    if (!mFFmpeg)
       return;
 
-   for (auto ofmt : mFFmpeg->GetOutputFormats())
+   // Enumerate all output formats
+   std::unique_ptr<AVOutputFormatWrapper> ofmt;
+
+   while ((ofmt = mFFmpeg->GetNextOutputFormat(ofmt.get()))!=NULL)
    {
       // Any audio-capable format has default audio codec.
       // If it doesn't, then it doesn't supports any audio codecs
@@ -1783,7 +1797,7 @@ void ExportFFmpegOptions::FetchCodecList()
       return;
    // Enumerate all codecs
    std::unique_ptr<AVCodecWrapper> codec;
-   for (auto codec : mFFmpeg->GetCodecs())
+   while ((codec = mFFmpeg->GetNextCodec(codec.get()))!=NULL)
    {
       // We're only interested in audio and only in encoders
       if (codec->IsAudio() && mFFmpeg->av_codec_is_encoder(codec->GetWrappedValue()))
@@ -1805,9 +1819,6 @@ void ExportFFmpegOptions::FetchCodecList()
 ///
 void ExportFFmpegOptions::PopulateOrExchange(ShuttleGui & S)
 {
-   IntSetting PredictionOrderSetting{ L"/FileFormats/FFmpegPredOrderMethod",
-      4 };  // defaults to Full search
-
    S.StartVerticalLay(1);
    S.StartMultiColumn(1, wxEXPAND);
    {
@@ -1924,7 +1935,8 @@ void ExportFFmpegOptions::PopulateOrExchange(ShuttleGui & S)
                      .MinSize( { 100, -1 } )
                      .TieNumberAsChoice(
                         XXO("PdO Method:"),
-                        PredictionOrderSetting,
+                        {wxT("/FileFormats/FFmpegPredOrderMethod"),
+                         4}, // Full search
                         PredictionOrderMethodNames
                      );
 
@@ -2082,7 +2094,7 @@ int ExportFFmpegOptions::FetchCompatibleCodecList(const wxChar *fmt, AudacityAVC
    if (found == 2)
    {
       std::unique_ptr<AVCodecWrapper> codec;
-      for (auto codec : mFFmpeg->GetCodecs())
+      while ((codec = mFFmpeg->GetNextCodec(codec.get()))!=NULL)
       {
          if (codec->IsAudio() && mFFmpeg->av_codec_is_encoder(codec->GetWrappedValue()))
          {
@@ -2139,6 +2151,7 @@ int ExportFFmpegOptions::FetchCompatibleFormatList(
    mShownFormatNames.clear();
    mShownFormatLongNames.clear();
    mFormatList->Clear();
+   std::unique_ptr<AVOutputFormatWrapper> ofmt;
 
    wxArrayString FromList;
    // Find all formats compatible to this codec in compatibility list
@@ -2176,7 +2189,7 @@ int ExportFFmpegOptions::FetchCompatibleFormatList(
    if (found)
    {
       // Find all formats which have this codec as default and which are not in the list yet and add them too
-      for (auto ofmt  : mFFmpeg->GetOutputFormats())
+      while ((ofmt = mFFmpeg->GetNextOutputFormat(ofmt.get()))!=NULL)
       {
          if (ofmt->GetAudioCodec() == mFFmpeg->GetAVCodecID(id))
          {

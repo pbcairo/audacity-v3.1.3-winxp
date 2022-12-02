@@ -30,6 +30,7 @@
 #include <wx/checkbox.h>
 #include <wx/slider.h>
 
+#include "../Shuttle.h"
 #include "../ShuttleGui.h"
 #include "../widgets/valnum.h"
 #include "TimeWarper.h"
@@ -61,13 +62,11 @@ enum
 
 // Soundtouch is not reasonable below -99% or above 3000%.
 
-const EffectParameterMethods& EffectChangeTempo::Parameters() const
-{
-   static CapturedParameters<EffectChangeTempo,
-      Percentage, UseSBSMS
-   > parameters;
-   return parameters;
-}
+// Define keys, defaults, minimums, and maximums for the effect parameters
+//
+//     Name          Type     Key               Def   Min      Max      Scale
+Param( Percentage,   double,  wxT("Percentage"), 0.0,  -95.0,   3000.0,  1  );
+Param( UseSBSMS,     bool,    wxT("SBSMS"),     false, false,   true,    1  );
 
 // We warp the slider to go up to 400%, but user can enter higher values.
 static const double kSliderMax = 100.0;         // warped above zero to actually go up to 400%
@@ -92,15 +91,19 @@ END_EVENT_TABLE()
 
 EffectChangeTempo::EffectChangeTempo()
 {
-   // mUseSBSMS always defaults to false and its value is used only if USE_SBSMS
-   // is defined
-   Parameters().Reset(*this);
+   m_PercentChange = DEF_Percentage;
    m_FromBPM = 0.0; // indicates not yet set
    m_ToBPM = 0.0; // indicates not yet set
    m_FromLength = 0.0;
    m_ToLength = 0.0;
 
    m_bLoopDetect = false;
+
+#if USE_SBSMS
+   mUseSBSMS = DEF_UseSBSMS;
+#else
+   mUseSBSMS = false;
+#endif
 
    SetLinearEffectFlag(true);
 }
@@ -111,42 +114,71 @@ EffectChangeTempo::~EffectChangeTempo()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectChangeTempo::GetSymbol() const
+ComponentInterfaceSymbol EffectChangeTempo::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectChangeTempo::GetDescription() const
+TranslatableString EffectChangeTempo::GetDescription()
 {
    return XO("Changes the tempo of a selection without changing its pitch");
 }
 
-ManualPageID EffectChangeTempo::ManualPage() const
+ManualPageID EffectChangeTempo::ManualPage()
 {
    return L"Change_Tempo";
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectChangeTempo::GetType() const
+EffectType EffectChangeTempo::GetType()
 {
    return EffectTypeProcess;
 }
 
-bool EffectChangeTempo::SupportsAutomation() const
+bool EffectChangeTempo::SupportsAutomation()
 {
+   return true;
+}
+
+// EffectClientInterface implementation
+bool EffectChangeTempo::DefineParams( ShuttleParams & S ){
+   S.SHUTTLE_PARAM( m_PercentChange, Percentage );
+   S.SHUTTLE_PARAM( mUseSBSMS, UseSBSMS );
+   return true;
+}
+
+bool EffectChangeTempo::GetAutomationParameters(CommandParameters & parms)
+{
+   parms.Write(KEY_Percentage, m_PercentChange);
+   parms.Write(KEY_UseSBSMS, mUseSBSMS);
+
+   return true;
+}
+
+bool EffectChangeTempo::SetAutomationParameters(CommandParameters & parms)
+{
+   ReadAndVerifyDouble(Percentage);
+   m_PercentChange = Percentage;
+
+#if USE_SBSMS
+   ReadAndVerifyBool(UseSBSMS);
+   mUseSBSMS = UseSBSMS;
+#else
+   mUseSBSMS = false;
+#endif
+
    return true;
 }
 
 // Effect implementation
 
-double EffectChangeTempo::CalcPreviewInputLength(
-   const EffectSettings &, double previewLength) const
+double EffectChangeTempo::CalcPreviewInputLength(double previewLength)
 {
    return previewLength * (100.0 + m_PercentChange) / 100.0;
 }
 
-bool EffectChangeTempo::CheckWhetherSkipEffect(const EffectSettings &) const
+bool EffectChangeTempo::CheckWhetherSkipEffect()
 {
    return (m_PercentChange == 0.0);
 }
@@ -161,7 +193,7 @@ bool EffectChangeTempo::Init()
    return true;
 }
 
-bool EffectChangeTempo::Process(EffectInstance &, EffectSettings &settings)
+bool EffectChangeTempo::Process()
 {
    bool success = false;
 
@@ -172,8 +204,7 @@ bool EffectChangeTempo::Process(EffectInstance &, EffectSettings &settings)
       EffectSBSMS proxy;
       proxy.mProxyEffectName = XO("High Quality Tempo Change");
       proxy.setParameters(tempoRatio, 1.0);
-      //! Already processing; don't make a dialog
-      success = Delegate(proxy, settings);
+      success = Delegate(proxy, *mUIParent, nullptr);
    }
    else
 #endif
@@ -194,9 +225,7 @@ bool EffectChangeTempo::Process(EffectInstance &, EffectSettings &settings)
    return success;
 }
 
-std::unique_ptr<EffectUIValidator> EffectChangeTempo::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &,
-   const EffectOutputs *)
+void EffectChangeTempo::PopulateOrExchange(ShuttleGui & S)
 {
    enum { precision = 2 };
 
@@ -212,8 +241,9 @@ std::unique_ptr<EffectUIValidator> EffectChangeTempo::PopulateOrExchange(
          m_pTextCtrl_PercentChange = S.Id(ID_PercentChange)
             .Validator<FloatingPointValidator<double>>(
                3, &m_PercentChange, NumValidatorStyle::THREE_TRAILING_ZEROES,
-               Percentage.min, Percentage.max )
-            .AddTextBox(XXO("Percent C&hange:"), L"", 12);
+               MIN_Percentage, MAX_Percentage
+            )
+            .AddTextBox(XXO("Percent C&hange:"), wxT(""), 12);
       }
       S.EndMultiColumn();
 
@@ -223,7 +253,7 @@ std::unique_ptr<EffectUIValidator> EffectChangeTempo::PopulateOrExchange(
          m_pSlider_PercentChange = S.Id(ID_PercentChange)
             .Name(XO("Percent Change"))
             .Style(wxSL_HORIZONTAL)
-            .AddSlider( {}, 0, (int)kSliderMax, (int)Percentage.min);
+            .AddSlider( {}, 0, (int)kSliderMax, (int)MIN_Percentage);
       }
       S.EndHorizontalLay();
 
@@ -273,9 +303,10 @@ std::unique_ptr<EffectUIValidator> EffectChangeTempo::PopulateOrExchange(
                   2, &m_ToLength, NumValidatorStyle::TWO_TRAILING_ZEROES,
                   // min and max need same precision as what we're validating (bug 963)
                   RoundValue( precision,
-                     (m_FromLength * 100.0) / (100.0 + Percentage.max) ),
+                     (m_FromLength * 100.0) / (100.0 + MAX_Percentage) ),
                   RoundValue( precision,
-                     (m_FromLength * 100.0) / (100.0 + Percentage.min) ) )
+                     (m_FromLength * 100.0) / (100.0 + MIN_Percentage) )
+               )
                /* i18n-hint: changing tempo "from" one value "to" another */
                .AddTextBox(XXC("t&o", "change tempo"), wxT(""), 12);
          }
@@ -296,10 +327,10 @@ std::unique_ptr<EffectUIValidator> EffectChangeTempo::PopulateOrExchange(
    }
    S.EndVerticalLay();
 
-   return nullptr;
+   return;
 }
 
-bool EffectChangeTempo::TransferDataToWindow(const EffectSettings &)
+bool EffectChangeTempo::TransferDataToWindow()
 {
    // Reset from length because it can be changed by Preview
    m_FromLength = mT1 - mT0;
@@ -326,7 +357,7 @@ bool EffectChangeTempo::TransferDataToWindow(const EffectSettings &)
    return true;
 }
 
-bool EffectChangeTempo::TransferDataFromWindow(EffectSettings &)
+bool EffectChangeTempo::TransferDataFromWindow()
 {
    if (!mUIParent->Validate() || !mUIParent->TransferDataFromWindow())
    {

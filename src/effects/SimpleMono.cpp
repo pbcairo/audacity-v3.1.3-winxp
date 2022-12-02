@@ -26,7 +26,7 @@
 
 #include <math.h>
 
-bool EffectSimpleMono::Process(EffectInstance &, EffectSettings &)
+bool EffectSimpleMono::Process()
 {
    //Iterate over each track
    this->CopyInputTracks(); // Set up mOutputTracks.

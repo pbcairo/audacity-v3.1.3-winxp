@@ -35,12 +35,12 @@ BatchPrefs::BatchPrefs(wxWindow * parent, wxWindowID winid):
    Populate();
 }
 
-ComponentInterfaceSymbol BatchPrefs::GetSymbol() const
+ComponentInterfaceSymbol BatchPrefs::GetSymbol()
 {
    return BATCH_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString BatchPrefs::GetDescription() const
+TranslatableString BatchPrefs::GetDescription()
 {
    return XO("Preferences for Batch");
 }

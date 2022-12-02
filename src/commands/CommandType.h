@@ -39,17 +39,16 @@ class CommandOutputTargets;
 class CommandSignature;
 class wxString;
 
-#include <optional>
-
 class AUDACITY_DLL_API OldStyleCommandType : public AudacityCommand
 {
 private:
-   std::optional<CommandSignature> mSignature;
+   ComponentInterfaceSymbol mSymbol;
+   Optional<CommandSignature> mSignature;
 
 public:
    OldStyleCommandType();
    virtual ~OldStyleCommandType();
-   ComponentInterfaceSymbol GetSymbol() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
    CommandSignature &GetSignature();
    wxString Describe(); // for debugging only ?
 
@@ -57,7 +56,7 @@ public:
    // =========================================
 
    // Return the name of the command type
-   virtual ComponentInterfaceSymbol BuildName() const = 0;
+   virtual ComponentInterfaceSymbol BuildName() = 0;
 
    /// Postcondition: signature is a 'signature' map containing parameter
    // names, validators and default values.

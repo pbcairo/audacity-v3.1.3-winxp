@@ -12,21 +12,17 @@
 #define __AUDACITY_EFFECT_AUTODUCK__
 
 #include "Effect.h"
-#include "../ShuttleAutomation.h"
-#include <float.h> // for DBL_MAX
-#include "../widgets/wxPanelWrapper.h"
 
 class wxBitmap;
 class wxTextCtrl;
+class EffectAutoDuckPanel;
 class ShuttleGui;
 
 #define AUTO_DUCK_PANEL_NUM_CONTROL_POINTS 5
 
-class EffectAutoDuck final : public StatefulEffect
+class EffectAutoDuck final : public Effect
 {
 public:
-   static inline EffectAutoDuck *
-   FetchParameters(EffectAutoDuck &e, EffectSettings &) { return &e; }
    static const ComponentInterfaceSymbol Symbol;
 
    EffectAutoDuck();
@@ -34,24 +30,29 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
-   ManualPageID ManualPage() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
+   ManualPageID ManualPage() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
+   EffectType GetType() override;
+
+   // EffectClientInterface implementation
+
+   bool DefineParams( ShuttleParams & S ) override;
+   bool GetAutomationParameters(CommandParameters & parms) override;
+   bool SetAutomationParameters(CommandParameters & parms) override;
 
    // Effect implementation
 
+   bool Startup() override;
    bool Init() override;
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
-   std::unique_ptr<EffectUIValidator> PopulateOrExchange(
-      ShuttleGui & S, EffectInstance &instance,
-      EffectSettingsAccess &access, const EffectOutputs *pOutputs) override;
-   bool TransferDataToWindow(const EffectSettings &settings) override;
-   bool DoTransferDataToWindow();
-   bool TransferDataFromWindow(EffectSettings &settings) override;
+   void End() override;
+   bool Process() override;
+   void PopulateOrExchange(ShuttleGui & S) override;
+   bool TransferDataToWindow() override;
+   bool TransferDataFromWindow() override;
 
 private:
    // EffectAutoDuck implementation
@@ -78,35 +79,19 @@ private:
    wxTextCtrl *mOuterFadeUpLenBox;
    wxTextCtrl *mThresholdDbBox;
    wxTextCtrl *mMaximumPauseBox;
+   EffectAutoDuckPanel *mPanel;
 
-   class Panel;
-   Panel *mPanel;
-
-   const EffectParameterMethods& Parameters() const override;
    DECLARE_EVENT_TABLE()
 
-static constexpr EffectParameter DuckAmountDb{ &EffectAutoDuck::mDuckAmountDb,
-   L"DuckAmountDb",     -12.0,   -24.0,   0.0,     1  };
-static constexpr EffectParameter InnerFadeDownLen{ &EffectAutoDuck::mInnerFadeDownLen,
-   L"InnerFadeDownLen", 0.0,     0.0,     3.0,     1  };
-static constexpr EffectParameter InnerFadeUpLen{ &EffectAutoDuck::mInnerFadeUpLen,
-   L"InnerFadeUpLen",   0.0,     0.0,     3.0,     1  };
-static constexpr EffectParameter OuterFadeDownLen{ &EffectAutoDuck::mOuterFadeDownLen,
-   L"OuterFadeDownLen", 0.5,     0.0,     3.0,     1  };
-static constexpr EffectParameter OuterFadeUpLen{ &EffectAutoDuck::mOuterFadeUpLen,
-   L"OuterFadeUpLen",   0.5,     0.0,     3.0,     1  };
-static constexpr EffectParameter ThresholdDb{ &EffectAutoDuck::mThresholdDb,
-   L"ThresholdDb",      -30.0,   -100.0,  0.0,     1  };
-static constexpr EffectParameter MaximumPause{ &EffectAutoDuck::mMaximumPause,
-   L"MaximumPause",     1.0,     0.0,     DBL_MAX, 1  };
+   friend class EffectAutoDuckPanel;
 };
 
-class EffectAutoDuck::Panel final : public wxPanelWrapper
+class EffectAutoDuckPanel final : public wxPanelWrapper
 {
 public:
-   Panel(
+   EffectAutoDuckPanel(
       wxWindow *parent, wxWindowID winid, EffectAutoDuck *effect);
-   virtual ~Panel();
+   virtual ~EffectAutoDuckPanel();
 
 private:
    enum EControlPoint

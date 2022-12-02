@@ -26,10 +26,10 @@ using namespace _sbsms_;
 class LabelTrack;
 class TimeWarper;
 
-class EffectSBSMS /* not final */ : public StatefulEffect
+class EffectSBSMS /* not final */ : public Effect
 {
 public:
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
+   bool Process() override;
    void setParameters(double rateStart, double rateEnd, double pitchStart, double pitchEnd,
                       SlideType rateSlideType, SlideType pitchSlideType,
                       bool bLinkRatePitch, bool bRateReferenceInput, bool bPitchReferenceInput);
@@ -42,7 +42,7 @@ protected:
    // This supplies the abstract virtual function, but in fact this symbol
    // does not get used:  this class is either a temporary helper, or else
    // GetSymbol() is overridden further in derived classes.
-   ComponentInterfaceSymbol GetSymbol() const override { return mProxyEffectName; }
+   ComponentInterfaceSymbol GetSymbol() override { return mProxyEffectName; }
 
 private:
    bool ProcessLabelTrack(LabelTrack *track);

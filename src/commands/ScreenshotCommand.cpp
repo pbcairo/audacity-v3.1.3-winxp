@@ -2,7 +2,7 @@
 
    Audacity - A Digital Audio Editor
    Copyright 1999-2018 Audacity Team
-   License: GPL v2 or later - see LICENSE.txt
+   License: GPL v2 - see LICENSE.txt
 
    Dominic Mazzoni
    Dan Horgan
@@ -21,7 +21,6 @@ small calculations of rectangles.
 #include "ScreenshotCommand.h"
 
 #include <mutex>
-#include <thread>
 
 #include "LoadCommands.h"
 #include "Project.h"
@@ -34,17 +33,17 @@ small calculations of rectangles.
 #include <wx/valgen.h>
 
 #include "../AdornedRulerPanel.h"
+#include "../BatchCommands.h"
 #include "../TrackPanel.h"
+#include "../effects/Effect.h"
 #include "../toolbars/ToolManager.h"
 #include "Prefs.h"
 #include "../ProjectWindow.h"
 #include "../Shuttle.h"
 #include "../ShuttleGui.h"
-#include "Track.h"
-#include "../widgets/VetoDialogHook.h"
+#include "../Track.h"
 #include "CommandContext.h"
 #include "CommandManager.h"
-#include "CommandDispatch.h"
 
 const ComponentInterfaceSymbol ScreenshotCommand::Symbol
 { XO("Screenshot") };
@@ -68,6 +67,7 @@ kCaptureWhatStrings[ ScreenshotCommand::nCaptureWhats ] =
    { XO("Timer") },
    { XO("Tools") },
    { XO("Transport") },
+   { XO("Mixer") },
    { XO("Meter") },
    { wxT("PlayMeter"), XO("Play Meter") },
    { wxT("RecordMeter"), XO("Record Meter") },
@@ -106,23 +106,20 @@ ScreenshotCommand::ScreenshotCommand()
    mbBringToTop=true;
    mIgnore=NULL;
    
-   static VetoDialogHook::Scope scope{ MayCapture };
+   static std::once_flag flag;
+   std::call_once( flag, []{
+      AudacityCommand::SetVetoDialogHook( MayCapture );
+      Effect::SetVetoDialogHook( MayCapture );
+   });
 }
 
-template<bool Const>
-bool ScreenshotCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define(                               mPath,        wxT("Path"),         wxString{});
+bool ScreenshotCommand::DefineParams( ShuttleParams & S ){
+   S.Define(                               mPath,        wxT("Path"),         wxT(""));
    S.DefineEnum(                           mWhat,        wxT("CaptureWhat"),  kwindow,kCaptureWhatStrings, nCaptureWhats );
    S.DefineEnum(                           mBack,        wxT("Background"),   kNone, kBackgroundStrings, nBackgrounds );
    S.Define(                               mbBringToTop, wxT("ToTop"), true );
    return true;
 };
-
-bool ScreenshotCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool ScreenshotCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void ScreenshotCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -202,13 +199,14 @@ wxRect ScreenshotCommand::GetBackgroundRect()
 
 static void Yield()
 {
-   using namespace std::chrono;
    int cnt;
-   for (cnt = 10; cnt && !wxTheApp->Yield(true); cnt--)
-      std::this_thread::sleep_for(10ms);
-   std::this_thread::sleep_for(200ms);
-   for (cnt = 10; cnt && !wxTheApp->Yield(true); cnt--)
-      std::this_thread::sleep_for(10ms);
+   for (cnt = 10; cnt && !wxTheApp->Yield(true); cnt--) {
+      wxMilliSleep(10);
+   }
+   wxMilliSleep(200);
+   for (cnt = 10; cnt && !wxTheApp->Yield(true); cnt--) {
+      wxMilliSleep(10);
+   }
 }
 
 bool ScreenshotCommand::Capture(
@@ -358,7 +356,6 @@ void ScreenshotCommand::CaptureWindowOnIdle(
    const CommandContext & context,
    wxWindow * pWin )
 {
-   using namespace std::chrono;
    wxDialog * pDlg = dynamic_cast<wxDialog*>(pWin);
    if( !pDlg ){
       wxLogDebug("Event from bogus dlg" );
@@ -378,7 +375,7 @@ void ScreenshotCommand::CaptureWindowOnIdle(
    wxLogDebug("Taking screenshot of window %s (%i,%i,%i,%i)", Name, 
          Pos.x, Pos.y, Siz.x, Siz.y );
    // This delay is needed, as dialogs take a moment or two to fade in.
-   std::this_thread::sleep_for(400ms);
+   wxMilliSleep( 400 );
    // JKC: The border of 7 pixels was determined from a trial capture and then measuring
    // in the GIMP.  I'm unsure where the border comes from.
    Capture( context, Name, pDlg, wxRect((int)Pos.x+7, (int)Pos.y, (int)Siz.x-14, (int)Siz.y-7) );
@@ -390,9 +387,7 @@ void ScreenshotCommand::CaptureWindowOnIdle(
 
 void ScreenshotCommand::CapturePreferences( 
    const CommandContext & context,
-   AudacityProject * pProject, const wxString &FileName )
-{
-   using namespace std::chrono;
+   AudacityProject * pProject, const wxString &FileName ){
    (void)&FileName;//compiler food.
    (void)&context;
    CommandManager &commandManager = CommandManager::Get( *pProject );
@@ -414,7 +409,7 @@ void ScreenshotCommand::CapturePreferences(
       gPrefs->Flush();
       CommandID Command{ wxT("Preferences") };
       const CommandContext projectContext( *pProject );
-      if( !::HandleTextualCommand( commandManager,
+      if( !MacroCommands::HandleTextualCommand( commandManager,
          Command, projectContext, AlwaysEnabledFlag, true ) )
       {
          // using GET in a log message for devs' eyes only
@@ -422,7 +417,7 @@ void ScreenshotCommand::CapturePreferences(
       }
       // This sleep is not needed, but gives user a chance to see the
       // dialogs as they whizz by.
-      std::this_thread::sleep_for(200ms);
+      wxMilliSleep( 200 );
    }
 }
 
@@ -445,9 +440,9 @@ void ScreenshotCommand::CaptureEffects(
       "PlotSpectrum",
 
       "Auto Duck...",  // needs a track below.
-      //"Spectral Edit Multi Tool",
-      "Spectral Edit Parametric EQ...", // Needs a spectral selection.
-      "Spectral Edit Shelves...",
+      //"Spectral edit multi tool",
+      "Spectral edit parametric EQ...", // Needs a spectral selection.
+      "Spectral edit shelves...",
 
       //"Noise Reduction...", // Exits twice...
       //"SC4...", //Has 'Close' rather than 'Cancel'.
@@ -558,9 +553,7 @@ void ScreenshotCommand::CaptureScriptables(
 
 
 void ScreenshotCommand::CaptureCommands( 
-   const CommandContext & context, const wxArrayStringEx & Commands )
-{
-   using namespace std::chrono;
+   const CommandContext & context, const wxArrayStringEx & Commands ){
    AudacityProject * pProject = &context.project;
    CommandManager &manager = CommandManager::Get( *pProject );
    wxString Str;
@@ -584,7 +577,7 @@ void ScreenshotCommand::CaptureCommands(
       }
       // This particular sleep is not needed, but gives user a chance to see the
       // dialogs as they whizz by.
-      std::this_thread::sleep_for(200ms);
+      wxMilliSleep( 200 );
    }
 }
 
@@ -802,6 +795,8 @@ bool ScreenshotCommand::Apply(const CommandContext & context)
       return CaptureToolbar(context, &toolManager, ToolsBarID, mFileName);
    case ktransport:
       return CaptureToolbar(context, &toolManager, TransportBarID, mFileName);
+   case kmixer:
+      return CaptureToolbar(context, &toolManager, MixerBarID, mFileName);
    case kmeter:
       return CaptureToolbar(context, &toolManager, MeterBarID, mFileName);
    case krecordmeter:

@@ -16,11 +16,10 @@ Paul Licameli split from TrackPanel.cpp
 
 #include "AColor.h"
 #include "../../SpectrumAnalyst.h"
-#include "../../LabelTrack.h"
 #include "NumberScale.h"
 #include "Project.h"
 #include "../../ProjectAudioIO.h"
-#include "ProjectHistory.h"
+#include "../../ProjectHistory.h"
 #include "../../ProjectSettings.h"
 #include "../../ProjectWindow.h"
 #include "../../RefreshCode.h"
@@ -36,6 +35,8 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../WaveTrack.h"
 #include "../../prefs/SpectrogramSettings.h"
 #include "../../../images/Cursors.h"
+
+#include <wx/event.h>
 
 // Only for definition of SonifyBeginModifyState:
 //#include "../../NoteTrack.h"
@@ -1053,7 +1054,7 @@ void SelectHandle::Connect(AudacityProject *pProject)
    mTimerHandler = std::make_shared<TimerHandler>( this, pProject );
 }
 
-class SelectHandle::TimerHandler
+class SelectHandle::TimerHandler : public wxEvtHandler
 {
 public:
    TimerHandler( SelectHandle *pParent, AudacityProject *pProject )
@@ -1061,21 +1062,23 @@ public:
       , mConnectedProject{ pProject }
    {
       if (mConnectedProject)
-         mSubscription = ProjectWindow::Get( *mConnectedProject )
-            .GetPlaybackScroller().Subscribe( *this, &SelectHandle::TimerHandler::OnTimer);
+         mConnectedProject->Bind(EVT_TRACK_PANEL_TIMER,
+            &SelectHandle::TimerHandler::OnTimer,
+            this);
    }
 
    // Receives timer event notifications, to implement auto-scroll
-   void OnTimer(Observer::Message);
+   void OnTimer(wxCommandEvent &event);
 
 private:
    SelectHandle *mParent;
    AudacityProject *mConnectedProject;
-   Observer::Subscription mSubscription;
 };
 
-void SelectHandle::TimerHandler::OnTimer(Observer::Message)
+void SelectHandle::TimerHandler::OnTimer(wxCommandEvent &event)
 {
+   event.Skip();
+
    // AS: If the user is dragging the mouse and there is a track that
    //  has captured the mouse, then scroll the screen, as necessary.
 

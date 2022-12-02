@@ -13,10 +13,8 @@ Paul Licameli
 
 #include "../../HitTestResult.h"
 #include "../../RefreshCode.h"
-#include "Track.h"
+#include "../../Track.h"
 #include "../../TrackPanelMouseEvent.h"
-
-#include <wx/event.h>
 
 ButtonHandle::ButtonHandle
 ( const std::shared_ptr<Track> &pTrack, const wxRect &rect )

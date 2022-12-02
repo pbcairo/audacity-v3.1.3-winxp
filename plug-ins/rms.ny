@@ -2,12 +2,13 @@
 ;version 4
 ;type analyze
 ;name "Measure RMS"
-;debugbutton false
+;manpage "Measure_RMS"
+;action "Measuring RMS level..."
 ;author "Steve Daulton"
-;release 2.3.1-1
-$copyright (_ "GNU General Public License v2.0 or later")
+;release 2.3.1
+;copyright "Released under terms of the GNU General Public License version 2"
 
-;; License: GPL v2+
+;; Released under terms of the GNU General Public License version 2:
 ;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 ;;
 ;; For information about writing and modifying Nyquist plug-ins:
@@ -16,7 +17,6 @@ $copyright (_ "GNU General Public License v2.0 or later")
 ;; This plug-in demonstrates how authors of Nyquist plug-ins may add translations
 ;; for output messages. It is not currently possible to provide translations for strings
 ;; in the header comments (such as the plug-in name) of 3rd party plug-ins.
-
 
 ;; Translations strings:
 ;; The "en" translation is not normally required unless the original text is in another

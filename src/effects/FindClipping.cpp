@@ -27,6 +27,7 @@
 
 #include <wx/intl.h>
 
+#include "../Shuttle.h"
 #include "../ShuttleGui.h"
 #include "../widgets/valnum.h"
 #include "../widgets/AudacityMessageBox.h"
@@ -34,13 +35,11 @@
 #include "../LabelTrack.h"
 #include "../WaveTrack.h"
 
-const EffectParameterMethods& EffectFindClipping::Parameters() const
-{
-   static CapturedParameters<EffectFindClipping,
-      Start, Stop
-   > parameters;
-   return parameters;
-}
+// Define keys, defaults, minimums, and maximums for the effect parameters
+//
+//     Name    Type  Key                     Def   Min   Max      Scale
+Param( Start,  int,  wxT("Duty Cycle Start"), 3,    1,    INT_MAX, 1   );
+Param( Stop,   int,  wxT("Duty Cycle End"),   3,    1,    INT_MAX, 1   );
 
 const ComponentInterfaceSymbol EffectFindClipping::Symbol
 { XO("Find Clipping") };
@@ -49,7 +48,8 @@ namespace{ BuiltinEffectsModule::Registration< EffectFindClipping > reg; }
 
 EffectFindClipping::EffectFindClipping()
 {
-   Parameters().Reset(*this);
+   mStart = DEF_Start;
+   mStop = DEF_Stop;
 }
 
 EffectFindClipping::~EffectFindClipping()
@@ -58,34 +58,60 @@ EffectFindClipping::~EffectFindClipping()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectFindClipping::GetSymbol() const
+ComponentInterfaceSymbol EffectFindClipping::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectFindClipping::GetDescription() const
+TranslatableString EffectFindClipping::GetDescription()
 {
    return XO("Creates labels where clipping is detected");
 }
 
-ManualPageID EffectFindClipping::ManualPage() const
+ManualPageID EffectFindClipping::ManualPage()
 {
    return L"Find_Clipping";
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectFindClipping::GetType() const
+EffectType EffectFindClipping::GetType()
 {
    return EffectTypeAnalyze;
 }
 
+// EffectClientInterface implementation
+bool EffectFindClipping::DefineParams( ShuttleParams & S ){
+   S.SHUTTLE_PARAM( mStart, Start );
+   S.SHUTTLE_PARAM( mStop, Stop );
+   return true;
+}
+
+bool EffectFindClipping::GetAutomationParameters(CommandParameters & parms)
+{
+   parms.Write(KEY_Start, mStart);
+   parms.Write(KEY_Stop, mStop);
+
+   return true;
+}
+
+bool EffectFindClipping::SetAutomationParameters(CommandParameters & parms)
+{
+   ReadAndVerifyInt(Start);
+   ReadAndVerifyInt(Stop);
+
+   mStart = Start;
+   mStop = Stop;
+
+   return true;
+}
+
 // Effect implementation
 
-bool EffectFindClipping::Process(EffectInstance &, EffectSettings &)
+bool EffectFindClipping::Process()
 {
    std::shared_ptr<AddedAnalysisTrack> addedTrack;
-   std::optional<ModifiedAnalysisTrack> modifiedTrack;
+   Optional<ModifiedAnalysisTrack> modifiedTrack;
    const wxString name{ _("Clipping") };
 
    auto clt = *inputTracks()->Any< const LabelTrack >().find_if(
@@ -214,43 +240,30 @@ bool EffectFindClipping::ProcessOne(LabelTrack * lt,
    return bGoodResult;
 }
 
-std::unique_ptr<EffectUIValidator> EffectFindClipping::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &access,
-   const EffectOutputs *)
+void EffectFindClipping::PopulateOrExchange(ShuttleGui & S)
 {
-   DoPopulateOrExchange(S, access);
-   return nullptr;
-}
-
-void EffectFindClipping::DoPopulateOrExchange(
-   ShuttleGui & S, EffectSettingsAccess &access)
-{
-   mpAccess = access.shared_from_this();
    S.StartMultiColumn(2, wxALIGN_CENTER);
    {
-      S
-         .Validator<IntegerValidator<int>>(
-            &mStart, NumValidatorStyle::DEFAULT, Start.min)
+      S.Validator<IntegerValidator<int>>(
+            &mStart, NumValidatorStyle::DEFAULT, MIN_Start)
          .TieTextBox(XXO("&Start threshold (samples):"), mStart, 10);
 
-      S
-         .Validator<IntegerValidator<int>>(
-            &mStop, NumValidatorStyle::DEFAULT, Stop.min)
+      S.Validator<IntegerValidator<int>>(
+            &mStop, NumValidatorStyle::DEFAULT, MIN_Stop)
          .TieTextBox(XXO("St&op threshold (samples):"), mStop, 10);
    }
    S.EndMultiColumn();
 }
 
-bool EffectFindClipping::TransferDataToWindow(const EffectSettings &)
+bool EffectFindClipping::TransferDataToWindow()
 {
    ShuttleGui S(mUIParent, eIsSettingToDialog);
-   // To do: eliminate this and just use validators for controls
-   DoPopulateOrExchange(S, *mpAccess);
+   PopulateOrExchange(S);
 
    return true;
 }
 
-bool EffectFindClipping::TransferDataFromWindow(EffectSettings &)
+bool EffectFindClipping::TransferDataFromWindow()
 {
    if (!mUIParent->Validate())
    {
@@ -258,8 +271,7 @@ bool EffectFindClipping::TransferDataFromWindow(EffectSettings &)
    }
 
    ShuttleGui S(mUIParent, eIsGettingFromDialog);
-   // To do: eliminate this and just use validators for controls
-   DoPopulateOrExchange(S, *mpAccess);
+   PopulateOrExchange(S);
 
    return true;
 }

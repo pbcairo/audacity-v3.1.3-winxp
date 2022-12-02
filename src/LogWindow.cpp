@@ -49,7 +49,7 @@ struct LogWindowUpdater : public PrefsListener
    void UpdatePrefs() override;
 };
 // Unique PrefsListener can't be statically constructed before the application
-// object initializes, so use optional
+// object initializes, so use Optional
 std::optional<LogWindowUpdater> pUpdater;
 
 void OnCloseWindow(wxCloseEvent & e);
@@ -111,10 +111,7 @@ void LogWindow::Show(bool show)
       S.StartVerticalLay(true);
       {
          sText = S.Style(wxTE_MULTILINE | wxHSCROLL | wxTE_READONLY | wxTE_RICH)
-            .AddTextWindow({});
-         
-         // Populated TextWindow created above
-         if (pLogger) *sText << pLogger->GetBuffer();
+            .AddTextWindow({}); // Populate this text window below
 
          S.AddSpace(0, 5);
          S.StartHorizontalLay(wxALIGN_CENTER, 0);

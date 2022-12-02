@@ -11,7 +11,6 @@
 #ifndef __AUDACITY_HISTORY_WINDOW__
 #define __AUDACITY_HISTORY_WINDOW__
 
-#include "Observer.h"
 #include "Prefs.h"
 #include "widgets/wxPanelWrapper.h" // to inherit
 
@@ -20,7 +19,6 @@ class wxListCtrl;
 class wxListEvent;
 class wxSpinCtrl;
 class wxTextCtrl;
-struct AudioIOEvent;
 class AudacityProject;
 class ShuttleGui;
 class UndoManager;
@@ -32,16 +30,14 @@ class HistoryDialog final : public wxDialogWrapper,
  public:
    HistoryDialog(AudacityProject * parent, UndoManager *manager);
 
-   void UpdateDisplayForClipboard(wxEvent &);
-   void UpdateDisplay(struct UndoRedoMessage);
-   void DoUpdateDisplay();
+   void UpdateDisplay(wxEvent &e);
    
    bool Show( bool show = true ) override;
 
  private:
    void Populate(ShuttleGui & S);
 
-   void OnAudioIO(AudioIOEvent);
+   void OnAudioIO(wxCommandEvent & evt);
    void DoUpdate();
    void UpdateLevels();
 
@@ -57,10 +53,6 @@ class HistoryDialog final : public wxDialogWrapper,
 
    // PrefsListener implementation
    void UpdatePrefs() override;
-
-   Observer::Subscription mAudioIOSubscription
-      , mUndoSubscription
-   ;
 
    AudacityProject   *mProject;
    UndoManager       *mManager;

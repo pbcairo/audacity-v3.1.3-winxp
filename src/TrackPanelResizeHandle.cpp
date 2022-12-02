@@ -12,7 +12,6 @@ Paul Licameli split from TrackPanel.cpp
 #include "TrackPanelResizeHandle.h"
 
 #include <wx/cursor.h>
-#include <wx/event.h>
 #include <wx/translation.h>
 
 #include "HitTestResult.h"

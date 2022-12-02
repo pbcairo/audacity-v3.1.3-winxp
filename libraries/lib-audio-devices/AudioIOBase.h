@@ -11,9 +11,10 @@ Paul Licameli split from AudioIO.h
 #ifndef __AUDACITY_AUDIO_IO_BASE__
 #define __AUDACITY_AUDIO_IO_BASE__
 
-#include <atomic>
+
+
+
 #include <cfloat>
-#include <chrono>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -66,8 +67,8 @@ struct AudioIOStartStreamOptions
 
    // An unfortunate thing needed just to make scrubbing work on Linux when
    // we can't use a separate polling thread.
-   // The return value is duration to sleep before calling again
-   std::function< std::chrono::milliseconds() > playbackStreamPrimer;
+   // The return value is a number of milliseconds to sleep before calling again
+   std::function< unsigned long() > playbackStreamPrimer;
 
    using PolicyFactory = std::function<
       std::unique_ptr<PlaybackPolicy>(const AudioIOStartStreamOptions&) >;
@@ -246,13 +247,11 @@ protected:
    std::weak_ptr<AudacityProject> mOwningProject;
 
    /// True if audio playback is paused
-   std::atomic<bool>   mPaused{ false };
+   bool                mPaused;
 
-   /*! Read by worker threads but unchanging during playback */
-   int                 mStreamToken{ 0 };
+   volatile int        mStreamToken;
 
    /// Audio playback rate in samples per second
-   /*! Read by worker threads but unchanging during playback */
    double              mRate;
 
    PaStream           *mPortStreamV19;
@@ -329,7 +328,6 @@ extern AUDIO_DEVICES_API StringSetting AudioIOHost;
 extern AUDIO_DEVICES_API DoubleSetting AudioIOLatencyCorrection;
 extern AUDIO_DEVICES_API DoubleSetting AudioIOLatencyDuration;
 extern AUDIO_DEVICES_API StringSetting AudioIOPlaybackDevice;
-extern AUDIO_DEVICES_API StringSetting AudioIOPlaybackSource;
 extern AUDIO_DEVICES_API DoubleSetting AudioIOPlaybackVolume;
 extern AUDIO_DEVICES_API IntSetting    AudioIORecordChannels;
 extern AUDIO_DEVICES_API StringSetting AudioIORecordingDevice;

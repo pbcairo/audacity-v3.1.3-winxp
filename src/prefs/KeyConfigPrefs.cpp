@@ -112,12 +112,12 @@ KeyConfigPrefs::KeyConfigPrefs(
    Bind(wxEVT_SHOW, &KeyConfigPrefs::OnShow, this);
 }
 
-ComponentInterfaceSymbol KeyConfigPrefs::GetSymbol() const
+ComponentInterfaceSymbol KeyConfigPrefs::GetSymbol()
 {
    return KEY_CONFIG_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString KeyConfigPrefs::GetDescription() const
+TranslatableString KeyConfigPrefs::GetDescription()
 {
    return XO("Preferences for KeyConfig");
 }
@@ -177,15 +177,6 @@ void KeyConfigPrefs::Populate()
 /// so this is only used in populating the panel.
 void KeyConfigPrefs::PopulateOrExchange(ShuttleGui & S)
 {
-   ChoiceSetting Setting{ L"/Prefs/KeyConfig/ViewBy",
-      {
-         { wxT("tree"), XXO("&Tree") },
-         { wxT("name"), XXO("&Name") },
-         { wxT("key"), XXO("&Key") },
-      },
-      0 // tree
-   };
-
    S.SetBorder(2);
 
    S.StartStatic(XO("Key Bindings"), 1);
@@ -200,7 +191,15 @@ void KeyConfigPrefs::PopulateOrExchange(ShuttleGui & S)
          {
             S.StartHorizontalLay();
             {
-               S.StartRadioButtonGroup(Setting);
+               S.StartRadioButtonGroup({
+                  wxT("/Prefs/KeyConfig/ViewBy"),
+                  {
+                     { wxT("tree"), XXO("&Tree") },
+                     { wxT("name"), XXO("&Name") },
+                     { wxT("key"), XXO("&Key") },
+                  },
+                  0 // tree
+               });
                {
                   mViewByTree = S.Id(ViewByTreeID)
                      .Name(XO("View by tree"))

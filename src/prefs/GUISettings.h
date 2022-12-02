@@ -2,9 +2,9 @@
 
 Audacity: A Digital Audio Editor
 
-@file GUISettings.h
+GUISettings.h
 
-Paul Licameli split from GUIPrefs.h
+Paul Licameli
 
 **********************************************************************/
 #ifndef __AUDACITY_GUI_SETTINGS__
@@ -19,15 +19,5 @@ Paul Licameli split from GUIPrefs.h
 #else
    #define RTL_WORKAROUND( pWnd )
 #endif
-
-class wxString;
-
-namespace GUISettings {
-
-// If no input language given, defaults to system language.
-// Returns the language actually used which is not lang if lang cannot be found.
-AUDACITY_DLL_API wxString SetLang( const wxString & lang );
-
-}
 
 #endif

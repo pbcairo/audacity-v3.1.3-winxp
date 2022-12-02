@@ -30,17 +30,10 @@ const ComponentInterfaceSymbol GetPreferenceCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< GetPreferenceCommand > reg; }
 
-template<bool Const>
-bool GetPreferenceCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define( mName, wxT("Name"),   wxString{} );
+bool GetPreferenceCommand::DefineParams( ShuttleParams & S ){
+   S.Define( mName, wxT("Name"),   wxT("") );
    return true;
 }
-
-bool GetPreferenceCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool GetPreferenceCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void GetPreferenceCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -69,19 +62,12 @@ const ComponentInterfaceSymbol SetPreferenceCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< SetPreferenceCommand > reg2; }
 
-template<bool Const>
-bool SetPreferenceCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define(    mName,   wxT("Name"),    wxString{} );
-   S.Define(   mValue,   wxT("Value"),   wxString{} );
+bool SetPreferenceCommand::DefineParams( ShuttleParams & S ){
+   S.Define(    mName,   wxT("Name"),    wxT("") );
+   S.Define(   mValue,   wxT("Value"),   wxT("") );
    S.Define( mbReload,   wxT("Reload"),  false );
    return true;
 }
-
-bool SetPreferenceCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool SetPreferenceCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void SetPreferenceCommand::PopulateOrExchange(ShuttleGui & S)
 {

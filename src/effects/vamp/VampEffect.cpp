@@ -75,8 +75,8 @@ VampEffect::VampEffect(std::unique_ptr<Vamp::Plugin> &&plugin,
    mHasParameters(hasParameters),
    mRate(0)
 {
-   mKey = mPath.BeforeFirst(wxT('/')).ToUTF8();
-   mName = mPath.AfterFirst(wxT('/'));
+   mKey = mPath.BeforeLast(wxT('/')).ToUTF8();
+   mName = mPath.AfterLast(wxT('/'));
 }
 
 VampEffect::~VampEffect()
@@ -87,27 +87,27 @@ VampEffect::~VampEffect()
 // ComponentInterface implementation
 // ============================================================================
 
-PluginPath VampEffect::GetPath() const
+PluginPath VampEffect::GetPath()
 {
    return mPath;
 }
 
-ComponentInterfaceSymbol VampEffect::GetSymbol() const
+ComponentInterfaceSymbol VampEffect::GetSymbol()
 {
    return mName;
 }
 
-VendorSymbol VampEffect::GetVendor() const
+VendorSymbol VampEffect::GetVendor()
 {
    return { wxString::FromUTF8(mPlugin->getMaker().c_str()) };
 }
 
-wxString VampEffect::GetVersion() const
+wxString VampEffect::GetVersion()
 {
    return wxString::Format(wxT("%d"), mPlugin->getPluginVersion());
 }
 
-TranslatableString VampEffect::GetDescription() const
+TranslatableString VampEffect::GetDescription()
 {
    return Verbatim(
       wxString::FromUTF8(mPlugin->getCopyright().c_str()) );
@@ -117,33 +117,35 @@ TranslatableString VampEffect::GetDescription() const
 // EffectDefinitionInterface implementation
 // ============================================================================
 
-EffectType VampEffect::GetType() const
+EffectType VampEffect::GetType()
 {
    return EffectTypeAnalyze;
 }
 
-EffectFamilySymbol VampEffect::GetFamily() const
+EffectFamilySymbol VampEffect::GetFamily()
 {
    return VAMPEFFECTS_FAMILY;
 }
 
-bool VampEffect::IsInteractive() const
+bool VampEffect::IsInteractive()
 {
    return mHasParameters;
 }
 
-bool VampEffect::IsDefault() const
+bool VampEffect::IsDefault()
 {
    return false;
 }
 
-unsigned VampEffect::GetAudioInCount() const
+
+// EffectClientInterface implementation
+
+unsigned VampEffect::GetAudioInCount()
 {
    return mPlugin->getMaxChannelCount();
 }
 
-bool VampEffect::SaveSettings(
-   const EffectSettings &, CommandParameters & parms) const
+bool VampEffect::GetAutomationParameters(CommandParameters & parms)
 {
    for (size_t p = 0, paramCount = mParameters.size(); p < paramCount; p++)
    {
@@ -189,8 +191,7 @@ bool VampEffect::SaveSettings(
    return true;
 }
 
-bool VampEffect::LoadSettings(
-   const CommandParameters & parms, EffectSettings &settings) const
+bool VampEffect::SetAutomationParameters(CommandParameters & parms)
 {
    // First pass verifies values
    for (size_t p = 0, paramCount = mParameters.size(); p < paramCount; p++)
@@ -340,7 +341,7 @@ bool VampEffect::Init()
    return true;
 }
 
-bool VampEffect::Process(EffectInstance &, EffectSettings &)
+bool VampEffect::Process()
 {
    if (!mPlugin)
    {
@@ -526,9 +527,12 @@ bool VampEffect::Process(EffectInstance &, EffectSettings &)
    return true;
 }
 
-std::unique_ptr<EffectUIValidator> VampEffect::PopulateOrExchange(
-   ShuttleGui & S, EffectInstance &, EffectSettingsAccess &,
-   const EffectOutputs *)
+void VampEffect::End()
+{
+   mPlugin.reset();
+}
+
+void VampEffect::PopulateOrExchange(ShuttleGui & S)
 {
    Vamp::Plugin::ProgramList programs = mPlugin->getPrograms();
 
@@ -686,10 +690,10 @@ std::unique_ptr<EffectUIValidator> VampEffect::PopulateOrExchange(
 
    scroller->SetScrollRate(0, 20);
 
-   return nullptr;
+   return;
 }
 
-bool VampEffect::TransferDataToWindow(const EffectSettings &)
+bool VampEffect::TransferDataToWindow()
 {
    if (!mUIParent->TransferDataToWindow())
    {
@@ -701,7 +705,7 @@ bool VampEffect::TransferDataToWindow(const EffectSettings &)
    return true;
 }
 
-bool VampEffect::TransferDataFromWindow(EffectSettings &)
+bool VampEffect::TransferDataFromWindow()
 {
    if (!mUIParent->Validate() || !mUIParent->TransferDataFromWindow())
    {

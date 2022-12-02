@@ -16,7 +16,7 @@ Paul Licameli split from TrackPanel.cpp
 
 #include "AColor.h"
 #include "AllThemeResources.h"
-#include "ProjectHistory.h"
+#include "../../../ProjectHistory.h"
 #include "../../../RefreshCode.h"
 #include "Theme.h"
 #include "../../../TimeTrack.h"
@@ -87,8 +87,8 @@ void TimeTrackVRulerControls::Draw(
       // Right align the ruler
       wxRect rr = rect;
       rr.width--;
-      if (t && t->vrulerSize.first < rect.GetWidth()) {
-         int adj = rr.GetWidth() - t->vrulerSize.first;
+      if (t && t->vrulerSize.GetWidth() < rect.GetWidth()) {
+         int adj = rr.GetWidth() - t->vrulerSize.GetWidth();
          rr.x += adj;
          rr.width -= adj;
       }
@@ -122,5 +122,5 @@ void TimeTrackVRulerControls::UpdateRuler( const wxRect &rect )
    vruler->SetLabelEdges(false);
    vruler->SetLog(tt->GetDisplayLog());
 
-   vruler->GetMaxSize( &tt->vrulerSize.first, &tt->vrulerSize.second );
+   vruler->GetMaxSize( &tt->vrulerSize.x, &tt->vrulerSize.y );
 }

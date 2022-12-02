@@ -37,12 +37,12 @@ PlaybackPrefs::~PlaybackPrefs()
 {
 }
 
-ComponentInterfaceSymbol PlaybackPrefs::GetSymbol() const
+ComponentInterfaceSymbol PlaybackPrefs::GetSymbol()
 {
    return PLAYBACK_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString PlaybackPrefs::GetDescription() const
+TranslatableString PlaybackPrefs::GetDescription()
 {
    return XO("Preferences for Playback");
 }

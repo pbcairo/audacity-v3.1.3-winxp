@@ -2,7 +2,7 @@
 
    Audacity: A Digital Audio Editor
    Audacity(R) is copyright (c) 1999-2010 Audacity Team.
-   License: GPL v2 or later.  See License.txt.
+   License: GPL v2.  See License.txt.
 
    MultiDialog.h
 
@@ -12,13 +12,14 @@
 *******************************************************************//**
 
 \class MultiDialog
-\brief A dialog presenting an exclusive, multiple choice, help button, and log info
+\brief A multi purpose dialog, mainly used to show lists of orphaned or
+damaged block files.  It is a good alternative to having a dialog pop up
+for each problem encountered, since there can be many orphans.
 
 *//*******************************************************************/
 
 
 #include "MultiDialog.h"
-#include "MemoryX.h"
 
 #include "../ShuttleGui.h"
 
@@ -48,7 +49,7 @@ public:
                const TranslatableString &message,
                const TranslatableString &title,
                const TranslatableStrings &buttons,
-               const ManualPageID &helpPage,
+               const wxString &helpPage,
                const TranslatableString &boxMsg, bool log);
    ~MultiDialog() {};
 
@@ -75,7 +76,7 @@ MultiDialog::MultiDialog(wxWindow * pParent,
                          const TranslatableString &message,
                          const TranslatableString &title,
                          const TranslatableStrings &buttons,
-                         const ManualPageID &helpPage,
+                         const wxString &helpPage,
                          const TranslatableString &boxMsg, 
                          bool log
    )
@@ -179,7 +180,7 @@ void MultiDialog::OnHelp(wxCommandEvent & WXUNUSED(event))
 int ShowMultiDialog(const TranslatableString &message,
    const TranslatableString &title,
    const TranslatableStrings &buttons,
-   const ManualPageID &helpPage,
+   const wxString &helpPage,
    const TranslatableString &boxMsg, bool log)
 {
    wxWindow * pParent = wxTheApp->GetTopWindow();
@@ -207,4 +208,10 @@ int ShowMultiDialog(const TranslatableString &message,
       dlog.Move(Pos);
    }
    return dlog.ShowModal();
+}
+
+const TranslatableString &DefaultMultiDialogMessage()
+{
+   static auto result = XO("Please select an action");
+   return result;
 }

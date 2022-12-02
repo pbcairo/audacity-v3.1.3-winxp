@@ -11,8 +11,6 @@
 #include "ZoomInfo.h"
 #include "Decibels.h"
 
-#include <cmath>
-
 namespace {
 static const double gMaxZoom = 6000000;
 static const double gMinZoom = 0.001;

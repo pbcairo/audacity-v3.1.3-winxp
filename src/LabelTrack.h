@@ -16,14 +16,13 @@
 #include "SelectedRegion.h"
 #include "Track.h"
 
-#include <wx/event.h> // to inherit
 
 class wxTextFile;
 
 class AudacityProject;
+class NotifyingSelectedRegion;
 class TimeWarper;
 
-class LabelTrack;
 struct LabelTrackHit;
 struct TrackPanelDrawingContext;
 
@@ -88,25 +87,8 @@ class AUDACITY_DLL_API LabelTrack final
    , public wxEvtHandler
 {
  public:
-   static wxString GetDefaultName();
-
-   // Construct and also build all attachments
-   static LabelTrack *New(AudacityProject &project);
-
-   /**
-    * \brief Create a new LabelTrack with specified @p name and append it to the @p trackList
-    * \return New LabelTrack with custom name
-    */
-   static LabelTrack* Create(TrackList& trackList, const wxString& name);
-
-   /**
-    * \brief Create a new LabelTrack with unique default name and append it to the @p trackList
-    * \return New LabelTrack with unique default name
-    */
-   static LabelTrack* Create(TrackList& trackList);
-
    LabelTrack();
-   LabelTrack(const LabelTrack &orig, ProtectedCreationArg&&);
+   LabelTrack(const LabelTrack &orig);
 
    virtual ~ LabelTrack();
 
@@ -121,7 +103,7 @@ class AUDACITY_DLL_API LabelTrack final
    double GetEndTime() const override;
 
    using Holder = std::shared_ptr<LabelTrack>;
-
+   
 private:
    Track::Holder Clone() const override;
 
@@ -173,9 +155,6 @@ public:
    int FindNextLabel(const SelectedRegion& currentSelection);
    int FindPrevLabel(const SelectedRegion& currentSelection);
 
-   const TypeInfo &GetTypeInfo() const override;
-   static const TypeInfo &ClassTypeInfo();
-
    Track::Holder PasteInto( AudacityProject & ) const override;
 
    struct IntervalData final : Track::IntervalData {
@@ -191,6 +170,8 @@ public:
    void SortLabels();
 
  private:
+   TrackKind GetKind() const override { return TrackKind::Label; }
+
    LabelArray mLabels;
 
    // Set in copied label tracks
@@ -199,9 +180,7 @@ public:
    int miLastLabel;                 // used by FindNextLabel and FindPrevLabel
 };
 
-ENUMERATE_TRACK_TYPE(LabelTrack);
-
-struct LabelTrackEvent : public wxEvent
+struct LabelTrackEvent : TrackListEvent
 {
    explicit
    LabelTrackEvent(
@@ -210,8 +189,7 @@ struct LabelTrackEvent : public wxEvent
       int formerPosition,
       int presentPosition
    )
-   : wxEvent{ 0, commandType }
-   , mpTrack{ pTrack }
+   : TrackListEvent{ commandType, pTrack }
    , mTitle{ title }
    , mFormerPosition{ formerPosition }
    , mPresentPosition{ presentPosition }
@@ -221,8 +199,6 @@ struct LabelTrackEvent : public wxEvent
    wxEvent *Clone() const override {
       // wxWidgets will own the event object
       return safenew LabelTrackEvent(*this); }
-
-   const std::weak_ptr<Track> mpTrack;
 
    // invalid for selection events
    wxString mTitle;

@@ -18,20 +18,12 @@ used utilities that don't correspond to things in the standard.
 set( SOURCES
    BufferedStreamReader.cpp
    BufferedStreamReader.h
-   CFResources.h
-   GlobalVariable.h
    MemoryX.cpp
    MemoryX.h
-   MessageBuffer.h
    ModuleConstants.cpp
    ModuleConstants.h
    MemoryStream.cpp
    MemoryStream.h
-   Observer.cpp
-   Observer.h
-   PackedArray.h
-   spinlock.h
-   TypedAny.h
 )
 audacity_library( lib-utility "${SOURCES}" ""
    "" ""

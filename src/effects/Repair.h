@@ -15,7 +15,7 @@
 
 class WaveTrack;
 
-class EffectRepair final : public StatefulEffect
+class EffectRepair final : public Effect
 {
 public:
    static const ComponentInterfaceSymbol Symbol;
@@ -25,17 +25,17 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   bool IsInteractive() const override;
+   EffectType GetType() override;
+   bool IsInteractive() override;
 
    // Effect implementation
 
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
+   bool Process() override;
 
 private:
    // EffectRepair implementation

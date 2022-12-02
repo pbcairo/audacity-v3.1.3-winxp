@@ -7,27 +7,26 @@
 #include "../NoteTrack.h"
 #include "Prefs.h"
 #include "Project.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "ProjectRate.h"
 #include "../ProjectSettings.h"
 #include "../ProjectWindow.h"
 #include "../ProjectWindows.h"
 #include "../SelectUtilities.h"
-#include "../SyncLock.h"
 #include "../TrackPanel.h"
 #include "../TrackPanelAx.h"
-#include "UndoManager.h"
+#include "../UndoManager.h"
 #include "ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../commands/CommandContext.h"
 #include "../commands/CommandManager.h"
-#include "TimeWarper.h"
+#include "../commands/ScreenshotCommand.h"
+#include "../effects/TimeWarper.h"
 #include "../export/Export.h"
 #include "../prefs/PrefsDialog.h"
 #include "../tracks/labeltrack/ui/LabelTrackView.h"
 #include "../tracks/playabletrack/wavetrack/ui/WaveTrackView.h"
 #include "../widgets/AudacityMessageBox.h"
-#include "../widgets/VetoDialogHook.h"
 
 // private helper classes and functions
 namespace {
@@ -164,8 +163,8 @@ void OnUndo(const CommandContext &context)
    auto t = *tracks.Selected().begin();
    if (!t)
       t = *tracks.Any().begin();
-   TrackFocus::Get(project).Set(t);
    if (t) {
+      TrackFocus::Get(project).Set(t);
       t->EnsureVisible();
    }
 }
@@ -194,8 +193,8 @@ void OnRedo(const CommandContext &context)
    auto t = *tracks.Selected().begin();
    if (!t)
       t = *tracks.Any().begin();
-   TrackFocus::Get(project).Set(t);
    if (t) {
+      TrackFocus::Get(project).Set(t);
       t->EnsureVisible();
    }
 }
@@ -266,7 +265,7 @@ void OnCut(const CommandContext &context)
    // Proceed to change the project.  If this throws, the project will be
    // rolled back by the top level handler.
 
-   (tracks.Any() + &SyncLock::IsSelectedOrSyncLockSelected).Visit(
+   (tracks.Any() + &Track::IsSelectedOrSyncLockSelected).Visit(
 #if defined(USE_MIDI)
       [](NoteTrack*) {
          //if NoteTrack, it was cut, so do not clear anything
@@ -309,7 +308,7 @@ void OnDelete(const CommandContext &context)
    for (auto n : tracks.Any()) {
       if (!n->SupportsBasicEditing())
          continue;
-      if (SyncLock::IsSelectedOrSyncLockSelected(n)) {
+      if (n->GetSelected() || n->IsSyncLockSelected()) {
          n->Clear(selectedRegion.t0(), selectedRegion.t1());
       }
    }
@@ -480,7 +479,7 @@ void OnPaste(const CommandContext &context)
             while (n && (!c->SameKindAs(*n) || !n->GetSelected()))
             {
                // Must perform sync-lock adjustment before incrementing n
-               if (SyncLock::IsSyncLockSelected(n)) {
+               if (n->IsSyncLockSelected()) {
                   auto newT1 = t0 + clipboard.Duration();
                   if (t1 != newT1 && t1 <= n->GetEndTime()) {
                      n->SyncLockAdjust(t1, newT1);
@@ -592,7 +591,7 @@ void OnPaste(const CommandContext &context)
             c = * ++ pC;
          }
       } // if (n->GetSelected())
-      else if (SyncLock::IsSyncLockSelected(n))
+      else if (n->IsSyncLockSelected())
       {
          auto newT1 = t0 + clipboard.Duration();
          if (t1 != newT1 && t1 <= n->GetEndTime()) {
@@ -631,7 +630,7 @@ void OnPaste(const CommandContext &context)
             }
          },
          [&](LabelTrack *lt, const Track::Fallthrough &fallthrough) {
-            if (!SyncLock::IsSelectedOrSyncLockSelected(lt))
+            if (!lt->GetSelected() && !lt->IsSyncLockSelected())
                return fallthrough();
 
             lt->Clear(t0, t1);
@@ -642,7 +641,7 @@ void OnPaste(const CommandContext &context)
                   clipboard.Duration(), t0);
          },
          [&](Track *n) {
-            if (SyncLock::IsSyncLockSelected(n))
+            if (n->IsSyncLockSelected())
                n->SyncLockAdjust(t1, t0 + clipboard.Duration() );
          }
       );
@@ -661,7 +660,7 @@ void OnPaste(const CommandContext &context)
       if (ff) {
          TrackFocus::Get(project).Set(ff);
          ff->EnsureVisible();
-         ff->LinkConsistencyFix();
+         ff->LinkConsistencyCheck();
       }
    }
 }
@@ -971,7 +970,7 @@ void OnPreferences(const CommandContext &context)
 
    GlobalPrefsDialog dialog(&GetProjectFrame( project ) /* parent */, &project );
 
-   if( VetoDialogHook::Call( &dialog ) )
+   if( ScreenshotCommand::MayCapture( &dialog ) )
       return;
 
    if (!dialog.ShowModal()) {
@@ -1156,7 +1155,7 @@ BaseItemSharedPtr EditMenu()
       Section( "Other",
       //////////////////////////////////////////////////////////////////////////
 
-         Menu( wxT("Clip"), XXO("Audi&o Clips"),
+         Menu( wxT("Clip"), XXO("Clip B&oundaries"),
             Section( "",
                /* i18n-hint: (verb) It's an item on a menu. */
                Command( wxT("Split"), XXO("Sp&lit"), FN(OnSplit),
@@ -1178,7 +1177,7 @@ BaseItemSharedPtr EditMenu()
 
          //////////////////////////////////////////////////////////////////////////
 
-         Command( wxT("EditMetaData"), XXO("&Metadata"), FN(OnEditMetadata),
+         Command( wxT("EditMetaData"), XXO("&Metadata..."), FN(OnEditMetadata),
             AudioIONotBusyFlag() )
 
          //////////////////////////////////////////////////////////////////////////
@@ -1190,7 +1189,7 @@ BaseItemSharedPtr EditMenu()
       // not appear in the Edit menu but instead under Audacity, consistent with
       // MacOS conventions.
       Section( "Preferences",
-         Command( wxT("Preferences"), XXO("Pre&ferences"), FN(OnPreferences),
+         Command( wxT("Preferences"), XXO("Pre&ferences..."), FN(OnPreferences),
             AudioIONotBusyFlag(), prefKey )
       )
 

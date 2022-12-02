@@ -11,9 +11,9 @@
 #ifndef __AUDACITY_EFFECT_FADE__
 #define __AUDACITY_EFFECT_FADE__
 
-#include "StatefulPerTrackEffect.h"
+#include "Effect.h"
 
-class EffectFade : public StatefulPerTrackEffect
+class EffectFade : public Effect
 {
 public:
    EffectFade(bool fadeIn = false);
@@ -21,21 +21,20 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   bool IsInteractive() const override;
+   EffectType GetType() override;
+   bool IsInteractive() override;
 
-   unsigned GetAudioInCount() const override;
-   unsigned GetAudioOutCount() const override;
-   bool ProcessInitialize(EffectSettings &settings, double sampleRate,
-      ChannelNames chanMap) override;
-   size_t ProcessBlock(EffectSettings &settings,
-      const float *const *inBlock, float *const *outBlock, size_t blockLen)
-      override;
+   // EffectClientInterface implementation
+
+   unsigned GetAudioInCount() override;
+   unsigned GetAudioOutCount() override;
+   bool ProcessInitialize(sampleCount totalLen, ChannelNames chanMap = NULL) override;
+   size_t ProcessBlock(float **inBlock, float **outBlock, size_t blockLen) override;
 
 private:
    // EffectFade implementation

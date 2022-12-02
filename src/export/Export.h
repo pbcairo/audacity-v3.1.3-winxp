@@ -31,19 +31,13 @@ class AudacityProject;
 class WaveTrack;
 class Tags;
 class TrackList;
-namespace MixerOptions{ class Downmix; }
-using MixerSpec = MixerOptions::Downmix;
+class MixerSpec;
 class ProgressDialog;
 class ShuttleGui;
 class Mixer;
 using WaveTrackConstArray = std::vector < std::shared_ptr < const WaveTrack > >;
 namespace BasicUI{ enum class ProgressResult : unsigned; }
 class wxFileNameWrapper;
-
-namespace BasicUI
-{
-class ProgressDialog;
-}
 
 class AUDACITY_DLL_API FormatInfo
 {
@@ -130,7 +124,7 @@ public:
     * ProgressResult::Stopped
     */
    virtual ProgressResult Export(AudacityProject *project,
-                       std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+                       std::unique_ptr<ProgressDialog> &pDialog,
                        unsigned channels,
                        const wxFileNameWrapper &fName,
                        bool selectedOnly,
@@ -149,9 +143,9 @@ protected:
          MixerSpec *mixerSpec);
 
    // Create or recycle a dialog.
-   static void InitProgress(std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+   static void InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
          const TranslatableString &title, const TranslatableString &message);
-   static void InitProgress(std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+   static void InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
          const wxFileNameWrapper &title, const TranslatableString &message);
 
 private:
@@ -203,11 +197,6 @@ public:
                 const FileExtension &type, const wxString & filename,
                 bool selectedOnly, double t0, double t1);
 
-   bool Process(
-      unsigned numChannels, const FileExtension& type, const wxString& filename,
-      bool selectedOnly, double t0, double t1,
-      std::unique_ptr<BasicUI::ProgressDialog>& progressDialog);
-
    void DisplayOptions(int index);
    int FindFormatIndex(int exportindex);
 
@@ -234,7 +223,7 @@ private:
    bool GetFilename();
    bool CheckFilename();
    bool CheckMix(bool prompt = true);
-   bool ExportTracks(std::unique_ptr<BasicUI::ProgressDialog>& progressDialog);
+   bool ExportTracks();
 
    static void CreateUserPaneCallback(wxWindow *parent, wxUIntPtr userdata);
    void CreateUserPane(wxWindow *parent);

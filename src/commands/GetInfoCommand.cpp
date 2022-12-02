@@ -36,9 +36,7 @@ This class now lists
 #include "ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../LabelTrack.h"
-#include "../NoteTrack.h"
-#include "../TimeTrack.h"
-#include "Envelope.h"
+#include "../Envelope.h"
 
 #include "SelectCommand.h"
 #include "../ShuttleGui.h"
@@ -46,7 +44,7 @@ This class now lists
 
 #include "../prefs/PrefsDialog.h"
 #include "../Shuttle.h"
-#include "PluginManager.h"
+#include "../PluginManager.h"
 #include "../tracks/ui/TrackView.h"
 #include "../ShuttleGui.h"
 
@@ -102,18 +100,13 @@ static const EnumValueSymbol kFormats[nFormats] =
    { XO("Brief") }
 };
 
-template<bool Const>
-bool GetInfoCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
+
+
+bool GetInfoCommand::DefineParams( ShuttleParams & S ){
    S.DefineEnum( mInfoType, wxT("Type"), 0, kTypes, nTypes );
    S.DefineEnum( mFormat, wxT("Format"), 0, kFormats, nFormats );
    return true;
 }
-
-bool GetInfoCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool GetInfoCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void GetInfoCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -220,13 +213,15 @@ public:
       const TranslatableString &Prompt,
       const BoolSetting &Setting) override;
 
-   wxChoice *TieChoice(const TranslatableString &Prompt,
-      ChoiceSetting &choiceSetting) override;
+   wxChoice *TieChoice(
+      const TranslatableString &Prompt,
+      const ChoiceSetting &choiceSetting ) override;
 
-   wxChoice * TieNumberAsChoice(const TranslatableString &Prompt,
-      IntSetting &Setting,
+   wxChoice * TieNumberAsChoice(
+      const TranslatableString &Prompt,
+      const IntSetting &Setting,
       const TranslatableStrings & Choices,
-      const std::vector<int> * pInternalChoices, int iNoMatchSelector) override;
+      const std::vector<int> * pInternalChoices, int iNoMatchSelector ) override;
 
    wxTextCtrl * TieTextBox(
       const TranslatableString &Prompt,
@@ -289,8 +284,9 @@ wxCheckBox * ShuttleGuiGetDefinition::TieCheckBoxOnRight(
    return ShuttleGui::TieCheckBoxOnRight( Prompt, Setting );
 }
 
-wxChoice * ShuttleGuiGetDefinition::TieChoice(const TranslatableString &Prompt,
-   ChoiceSetting &choiceSetting)
+wxChoice * ShuttleGuiGetDefinition::TieChoice(
+   const TranslatableString &Prompt,
+   const ChoiceSetting &choiceSetting  )
 {
    StartStruct();
    AddItem( choiceSetting.Key(), "id" );
@@ -309,7 +305,7 @@ wxChoice * ShuttleGuiGetDefinition::TieChoice(const TranslatableString &Prompt,
 
 wxChoice * ShuttleGuiGetDefinition::TieNumberAsChoice(
    const TranslatableString &Prompt,
-   IntSetting &Setting,
+   const IntSetting &Setting,
    const TranslatableStrings & Choices,
    const std::vector<int> * pInternalChoices, int iNoMatchSelector)
 {

@@ -88,6 +88,23 @@ bool XMLValueChecker::IsGoodPathString(const FilePath &str)
             (str.length() <= PLATFORM_MAX_PATH));
 }
 
+bool XMLTagHandler::ReadXMLTag(const char *tag, const char **attrs)
+{
+   mCurrentTagAttributes.clear();
+
+   while (*attrs) {
+      const char* name = *attrs++;
+      const char* value = *attrs++;
+
+      mCurrentTagAttributes.emplace_back(
+         std::string_view(name), XMLAttributeValueView(std::string_view(value)));
+   }
+
+   bool result = HandleXMLTag(tag, mCurrentTagAttributes);
+
+   return result;
+}
+
 void XMLTagHandler::ReadXMLEndTag(const char *tag)
 {
    HandleXMLEndTag(tag);

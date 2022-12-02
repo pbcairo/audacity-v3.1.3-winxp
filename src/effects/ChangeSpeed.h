@@ -14,7 +14,6 @@
 #define __AUDACITY_EFFECT_CHANGESPEED__
 
 #include "Effect.h"
-#include "../ShuttleAutomation.h"
 
 class wxSlider;
 class wxChoice;
@@ -22,11 +21,9 @@ class wxTextCtrl;
 class NumericTextCtrl;
 class ShuttleGui;
 
-class EffectChangeSpeed final : public StatefulEffect
+class EffectChangeSpeed final : public Effect
 {
 public:
-   static inline EffectChangeSpeed *
-   FetchParameters(EffectChangeSpeed &e, EffectSettings &) { return &e; }
    static const ComponentInterfaceSymbol Symbol;
 
    EffectChangeSpeed();
@@ -34,27 +31,31 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
-   ManualPageID ManualPage() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
+   ManualPageID ManualPage() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   OptionalMessage LoadFactoryDefaults(EffectSettings &settings)
-      const override;
-   OptionalMessage DoLoadFactoryDefaults(EffectSettings &settings);
+   EffectType GetType() override;
 
-   bool CheckWhetherSkipEffect(const EffectSettings &settings) const override;
-   double CalcPreviewInputLength(
-      const EffectSettings &settings, double previewLength) const override;
+   // EffectClientInterface implementation
+
+   bool DefineParams( ShuttleParams & S ) override;
+   bool GetAutomationParameters(CommandParameters & parms) override;
+   bool SetAutomationParameters(CommandParameters & parms) override;
+   bool LoadFactoryDefaults() override;
+
+   // Effect implementation
+
+   bool CheckWhetherSkipEffect() override;
+   double CalcPreviewInputLength(double previewLength) override;
+   bool Startup() override;
    bool Init() override;
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
-   std::unique_ptr<EffectUIValidator> PopulateOrExchange(
-      ShuttleGui & S, EffectInstance &instance,
-      EffectSettingsAccess &access, const EffectOutputs *pOutputs) override;
-   bool TransferDataToWindow(const EffectSettings &settings) override;
-   bool TransferDataFromWindow(EffectSettings &settings) override;
+   bool Process() override;
+   void PopulateOrExchange(ShuttleGui & S) override;
+   bool TransferDataFromWindow() override;
+   bool TransferDataToWindow() override;
 
 private:
    // EffectChangeSpeed implementation
@@ -112,11 +113,7 @@ private:
    double   mToLength;        // target length of selection
    NumericFormatSymbol mFormat;          // time control format
 
-   const EffectParameterMethods& Parameters() const override;
    DECLARE_EVENT_TABLE()
-
-static constexpr EffectParameter Percentage{ &EffectChangeSpeed::m_PercentChange,
-   L"Percentage",    0.0,  -99.0,   4900.0,  1  };
 };
 
 #endif // __AUDACITY_EFFECT_CHANGESPEED__

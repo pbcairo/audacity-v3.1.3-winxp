@@ -26,8 +26,8 @@ class DevicePrefs final : public PrefsPanel
  public:
    DevicePrefs(wxWindow * parent, wxWindowID winid);
    virtual ~DevicePrefs();
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    bool Commit() override;
    ManualPageID HelpPageName() override;
@@ -55,7 +55,5 @@ class DevicePrefs final : public PrefsPanel
 
    DECLARE_EVENT_TABLE()
 };
-
-PrefsPanel *DevicePrefsFactory(wxWindow *parent, wxWindowID winid, AudacityProject *);
 
 #endif

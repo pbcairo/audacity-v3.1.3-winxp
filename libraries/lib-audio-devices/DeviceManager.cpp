@@ -27,6 +27,8 @@
 
 #include "DeviceChange.h" // for HAVE_DEVICE_CHANGE
 
+wxDEFINE_EVENT(EVT_RESCANNED_DEVICES, wxEvent);
+
 DeviceManager DeviceManager::dm;
 
 /// Gets the singleton instance
@@ -233,6 +235,13 @@ static void AddSources(int deviceIndex, int rate, std::vector<DeviceSourceMap> *
    }
 }
 
+namespace {
+struct MyEvent : wxEvent {
+   using wxEvent::wxEvent;
+   wxEvent *Clone() const override { return new MyEvent{*this}; }
+};
+}
+
 /// Gets a NEW list of devices by terminating and restarting portaudio
 /// Assumes that DeviceManager is only used on the main thread.
 void DeviceManager::Rescan()
@@ -286,18 +295,20 @@ void DeviceManager::Rescan()
    }
 
    // If this was not an initial scan update each device toolbar.
-   if ( m_inited )
-      Publish(DeviceChangeMessage::Rescan);
+   if ( m_inited ) {
+      MyEvent e{ 0, EVT_RESCANNED_DEVICES };
+      this->ProcessEvent( e );
+   }
 
    m_inited = true;
    mRescanTime = std::chrono::steady_clock::now();
 }
 
 
-std::chrono::duration<float> DeviceManager::GetTimeSinceRescan() {
+float DeviceManager::GetTimeSinceRescan() {
    auto now = std::chrono::steady_clock::now();
    auto dur = std::chrono::duration_cast<std::chrono::duration<float>>(now - mRescanTime);
-   return dur;
+   return dur.count();
 }
 
 

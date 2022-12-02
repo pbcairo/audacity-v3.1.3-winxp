@@ -18,7 +18,6 @@
 
 #include "Effect.h"
 #include "ModuleManager.h"
-#include "PluginManager.h"
 
 static bool sInitialized = false;
 
@@ -51,17 +50,17 @@ void BuiltinEffectsModule::DoRegistration(
 // When the module is builtin to Audacity, we use the same function, but it is
 // declared static so as not to clash with other builtin modules.
 // ============================================================================
-DECLARE_PROVIDER_ENTRY(AudacityModule)
+DECLARE_MODULE_ENTRY(AudacityModule)
 {
    // Create and register the importer
    // Trust the module manager not to leak this
-   return std::make_unique<BuiltinEffectsModule>();
+   return safenew BuiltinEffectsModule();
 }
 
 // ============================================================================
 // Register this as a builtin module
 // ============================================================================
-DECLARE_BUILTIN_PROVIDER(BuiltinsEffectBuiltin);
+DECLARE_BUILTIN_MODULE(BuiltinsEffectBuiltin);
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -81,34 +80,34 @@ BuiltinEffectsModule::~BuiltinEffectsModule()
 // ComponentInterface implementation
 // ============================================================================
 
-PluginPath BuiltinEffectsModule::GetPath() const
+PluginPath BuiltinEffectsModule::GetPath()
 {
    return {};
 }
 
-ComponentInterfaceSymbol BuiltinEffectsModule::GetSymbol() const
+ComponentInterfaceSymbol BuiltinEffectsModule::GetSymbol()
 {
    return XO("Builtin Effects");
 }
 
-VendorSymbol BuiltinEffectsModule::GetVendor() const
+VendorSymbol BuiltinEffectsModule::GetVendor()
 {
    return XO("The Audacity Team");
 }
 
-wxString BuiltinEffectsModule::GetVersion() const
+wxString BuiltinEffectsModule::GetVersion()
 {
    // This "may" be different if this were to be maintained as a separate DLL
    return AUDACITY_VERSION_STRING;
 }
 
-TranslatableString BuiltinEffectsModule::GetDescription() const
+TranslatableString BuiltinEffectsModule::GetDescription()
 {
    return XO("Provides builtin effects to Audacity");
 }
 
 // ============================================================================
-// PluginProvider implementation
+// ModuleInterface implementation
 // ============================================================================
 
 bool BuiltinEffectsModule::Initialize()
@@ -140,35 +139,28 @@ const FileExtensions &BuiltinEffectsModule::GetFileExtensions()
    return empty;
 }
 
-void BuiltinEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
+bool BuiltinEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
 {
-   // Assume initial PluginManager::Save is not yet done
-
-   // The set of built-in functions that are realtime capable may differ with
-   // the plugin registry version
-   bool rediscoverAll = !Regver_eq(pm.GetRegistryVersion(), REGVERCUR);
-
    TranslatableString ignoredErrMsg;
-   for (const auto &pair : mEffects) {
+   for (const auto &pair : mEffects)
+   {
       const auto &path = pair.first;
-      if (rediscoverAll ||
-         !pm.IsPluginRegistered(path, &pair.second->name.Msgid())
-      ){
-         DiscoverPluginsAtPath(path, ignoredErrMsg, [&](PluginProvider *provider, ComponentInterface *ident)
-         {
-            const auto pluginId = PluginManagerInterface::DefaultRegistrationCallback(provider, ident);
-            if(pair.second->excluded)
-               PluginManager::Get().EnablePlugin(pluginId, false);
-            return pluginId;
-         });
-         
+      if (!pm.IsPluginRegistered(path, &pair.second->name.Msgid()))
+      {
+         if ( pair.second->excluded )
+            continue;
+         // No checking of error ?
+         DiscoverPluginsAtPath(path, ignoredErrMsg,
+            PluginManagerInterface::DefaultRegistrationCallback);
       }
    }
+
+   // We still want to be called during the normal registration process
+   return false;
 }
 
-PluginPaths BuiltinEffectsModule::FindModulePaths(PluginManagerInterface &)
+PluginPaths BuiltinEffectsModule::FindPluginPaths(PluginManagerInterface & WXUNUSED(pm))
 {
-   // Not really libraries
    PluginPaths names;
    for ( const auto &pair : mEffects )
       names.push_back( pair.first );
@@ -179,7 +171,6 @@ unsigned BuiltinEffectsModule::DiscoverPluginsAtPath(
    const PluginPath & path, TranslatableString &errMsg,
    const RegistrationCallback &callback)
 {
-   // At most one
    errMsg = {};
    auto effect = Instantiate(path);
    if (effect)
@@ -193,16 +184,18 @@ unsigned BuiltinEffectsModule::DiscoverPluginsAtPath(
    return 0;
 }
 
+bool BuiltinEffectsModule::IsPluginValid(const PluginPath & path, bool bFast)
+{
+   // bFast is unused as checking in the list is fast.
+   static_cast<void>(bFast);
+   return mEffects.find( path ) != mEffects.end();
+}
+
 std::unique_ptr<ComponentInterface>
-BuiltinEffectsModule::LoadPlugin(const PluginPath & path)
+BuiltinEffectsModule::CreateInstance(const PluginPath & path)
 {
    // Acquires a resource for the application.
    return Instantiate(path);
-}
-
-bool BuiltinEffectsModule::CheckPluginExist(const PluginPath& path) const
-{
-   return mEffects.find( path ) != mEffects.end();
 }
 
 // ============================================================================

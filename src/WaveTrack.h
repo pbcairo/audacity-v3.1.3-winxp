@@ -11,21 +11,16 @@
 #ifndef __AUDACITY_WAVETRACK__
 #define __AUDACITY_WAVETRACK__
 
-#include "Prefs.h"
+#include "Track.h"
 #include "SampleCount.h"
-#include "SampleFormat.h"
-#include "SampleTrack.h"
 
 #include <vector>
 #include <functional>
-#include <wx/thread.h>
 #include <wx/longlong.h>
-
-class wxRect;
 
 #include "WaveTrackLocation.h"
 
-namespace BasicUI{ class ProgressDialog; }
+class ProgressDialog;
 
 class SampleBlockFactory;
 using SampleBlockFactoryPtr = std::shared_ptr<SampleBlockFactory>;
@@ -51,42 +46,36 @@ using WaveClipConstPointers = std::vector < const WaveClip* >;
 //
 #define WAVETRACK_MERGE_POINT_TOLERANCE 0.01
 
+/// \brief Structure to hold region of a wavetrack and a comparison function
+/// for sortability.
+struct Region
+{
+   Region() : start(0), end(0) {}
+   Region(double start_, double end_) : start(start_), end(end_) {}
+
+   double start, end;
+
+   //used for sorting
+   bool operator < (const Region &b) const
+   {
+      return this->start < b.start;
+   }
+};
+
+using Regions = std::vector < Region >;
+
 class Envelope;
 
-class AUDACITY_DLL_API WaveTrack final : public WritableSampleTrack
-{
+class AUDACITY_DLL_API WaveTrack final : public PlayableTrack {
 public:
-   /// \brief Structure to hold region of a wavetrack and a comparison function
-   /// for sortability.
-   struct Region
-   {
-      Region() : start(0), end(0) {}
-      Region(double start_, double end_) : start(start_), end(end_) {}
-
-      double start, end;
-
-      //used for sorting
-      bool operator < (const Region &b) const
-      {
-         return this->start < b.start;
-      }
-   };
-
-   using Regions = std::vector < Region >;
-
-   static wxString GetDefaultAudioTrackNamePreference();
 
    //
    // Constructor / Destructor / Duplicator
    //
 
-   // Construct and also build all attachments
-   static WaveTrack *New( AudacityProject &project );
-
    WaveTrack(
       const SampleBlockFactoryPtr &pFactory, sampleFormat format, double rate);
-   //! Copied only in WaveTrack::Clone() !
-   WaveTrack(const WaveTrack &orig, ProtectedCreationArg&&);
+   WaveTrack(const WaveTrack &orig);
 
    // overwrite data excluding the sample sequence but including display
    // settings
@@ -106,14 +95,14 @@ private:
    using Holder = std::shared_ptr<WaveTrack>;
 
    virtual ~WaveTrack();
-   
+
    double GetOffset() const override;
    void SetOffset(double o) override;
-   ChannelType GetChannelIgnoringPan() const override;
+   virtual ChannelType GetChannelIgnoringPan() const;
    ChannelType GetChannel() const override;
    virtual void SetPanFromChannelType() override;
 
-   bool LinkConsistencyFix(bool doFix, bool completeList) override;
+   bool LinkConsistencyCheck() override;
 
    /** @brief Get the time at which the first clip in the track starts
     *
@@ -136,7 +125,7 @@ private:
    // WaveTrack parameters
    //
 
-   double GetRate() const override;
+   double GetRate() const;
    void SetRate(double newRate);
 
    // Multiplicative factor.  Only converted to dB for display.
@@ -147,10 +136,13 @@ private:
    float GetPan() const;
    void SetPan(float newPan) override;
 
-   float GetChannelGain(int channel) const override;
+   // Takes gain and pan into account
+   float GetChannelGain(int channel) const;
 
-   float GetOldChannelGain(int channel) const override;
-   void SetOldChannelGain(int channel, float gain) override;
+   // Old gain is used in playback in linearly interpolating 
+   // the gain.
+   float GetOldChannelGain(int channel) const;
+   void SetOldChannelGain(int channel, float gain);
 
    int GetWaveColorIndex() const { return mWaveColorIndex; };
    void SetWaveColorIndex(int colorIndex);
@@ -158,8 +150,7 @@ private:
    sampleCount GetPlaySamplesCount() const;
    sampleCount GetSequenceSamplesCount() const;
 
-   sampleFormat GetSampleFormat() const override { return mFormat; }
-
+   sampleFormat GetSampleFormat() const { return mFormat; }
    void ConvertToSampleFormat(sampleFormat format,
       const std::function<void(size_t)> & progressReport = {});
 
@@ -178,19 +169,13 @@ private:
 
    Track::Holder Cut(double t0, double t1) override;
 
-   //! Make another track copying format, rate, color, etc. but containing no
-   //! clips
-   /*!
-    It is important to pass the correct factory (that for the project
-    which will own the copy) in the unusual case that a track is copied from
-    another project or the clipboard.  For copies within one project, the
-    default will do.
-
-    @param keepLink if false, make the new track mono.  But always preserve
-    any other track group data.
-    */
-   Holder EmptyCopy(const SampleBlockFactoryPtr &pFactory = {},
-      bool keepLink = true) const;
+   // Make another track copying format, rate, color, etc. but containing no
+   // clips
+   // It is important to pass the correct factory (that for the project
+   // which will own the copy) in the unusual case that a track is copied from
+   // another project or the clipboard.  For copies within one project, the
+   // default will do.
+   Holder EmptyCopy(const SampleBlockFactoryPtr &pFactory = {} ) const;
 
    // If forClipboard is true,
    // and there is no clip at the end time of the selection, then the result
@@ -239,15 +224,22 @@ private:
     */
    bool IsEmpty(double t0, double t1) const;
 
-   /*
+   /** @brief Append the sample data to the WaveTrack. You must call Flush()
+    * after the last Append.
+    *
     * If there is an existing WaveClip in the WaveTrack then the data is
     * appended to that clip. If there are no WaveClips in the track, then a NEW
     * one is created.
     *
+    * @return true if at least one complete block was created
     */
    bool Append(constSamplePtr buffer, sampleFormat format,
-               size_t len, unsigned int stride=1) override;
-   void Flush() override;
+               size_t len, unsigned int stride=1);
+   /// Flush must be called after last Append
+   void Flush();
+
+   ///Invalidates all clips' wavecaches.  Careful, This may not be threadsafe.
+   void ClearWaveCaches();
 
    ///
    /// MM: Now that each wave track can contain multiple clips, we don't
@@ -260,6 +252,30 @@ private:
    /// guaranteed that the same samples are affected.
    ///
 
+   //! Retrieve samples from a track in floating-point format, regardless of the storage format
+   /*!
+    @param buffer receives the samples
+    @param start starting sample, relative to absolute time zero (not to the track's offset value)
+    @param len how many samples to get.  buffer is assumed sufficiently large
+    @param fill how to assign values for sample positions between clips
+    @param mayThrow if false, fill buffer with zeros when there is failure to retrieve samples; else throw
+    @param[out] pNumWithinClips Report how many samples were copied from within clips, rather
+       than filled according to fillFormat; but these were not necessarily one contiguous range.
+    */
+   bool GetFloats(float *buffer, sampleCount start, size_t len,
+      fillFormat fill = fillZero, bool mayThrow = true,
+      sampleCount * pNumWithinClips = nullptr) const
+   {
+      //! Cast the pointer to pass it to Get() which handles multiple destination formats
+      return Get(reinterpret_cast<samplePtr>(buffer),
+         floatSample, start, len, fill, mayThrow, pNumWithinClips);
+   }
+
+   //! Retrieve samples from a track in a specified format
+   /*!
+    @copydetails WaveTrack::GetFloats()
+    @param format sample format of the destination buffer
+    */
    bool Get(samplePtr buffer, sampleFormat format,
       sampleCount start, size_t len,
       fillFormat fill = fillZero,
@@ -267,12 +283,15 @@ private:
       // Report how many samples were copied from within clips, rather than
       // filled according to fillFormat; but these were not necessarily one
       // contiguous range.
-      sampleCount * pNumWithinClips = nullptr) const override;
+      sampleCount * pNumWithinClips = nullptr) const;
+
    void Set(constSamplePtr buffer, sampleFormat format,
                    sampleCount start, size_t len);
 
+   // Fetch envelope values corresponding to uniformly separated sample times
+   // starting at the given time.
    void GetEnvelopeValues(double *buffer, size_t bufferLen,
-                         double t0) const override;
+                         double t0) const;
 
    // May assume precondition: t0 <= t1
    std::pair<float, float> GetMinMax(
@@ -297,11 +316,12 @@ private:
    // and alignment for efficiency
    //
 
-   sampleCount GetBlockStart(sampleCount t) const override;
+   // This returns a possibly large or negative value
+   sampleCount GetBlockStart(sampleCount t) const;
 
    // These return a nonnegative number of samples meant to size a memory buffer
-   size_t GetBestBlockSize(sampleCount t) const override;
-   size_t GetMaxBlockSize() const override;
+   size_t GetBestBlockSize(sampleCount t) const;
+   size_t GetMaxBlockSize() const;
    size_t GetIdealBlockSize();
 
    //
@@ -323,6 +343,27 @@ private:
 
    bool CloseLock(); //should be called when the project closes.
    // not balanced by unlocking calls.
+
+   /** @brief Convert correctly between an (absolute) time in seconds and a number of samples.
+    *
+    * This method will not give the correct results if used on a relative time (difference of two
+    * times). Each absolute time must be converted and the numbers of samples differenced:
+    *    sampleCount start = track->TimeToLongSamples(t0);
+    *    sampleCount end = track->TimeToLongSamples(t1);
+    *    sampleCount len = (sampleCount)(end - start);
+    * NOT the likes of:
+    *    sampleCount len = track->TimeToLongSamples(t1 - t0);
+    * See also WaveTrack::TimeToLongSamples().
+    * @param t0 The time (floating point seconds) to convert
+    * @return The number of samples from the start of the track which lie before the given time.
+    */
+   sampleCount TimeToLongSamples(double t0) const;
+   /** @brief Convert correctly between a number of samples and an (absolute) time in seconds.
+    *
+    * @param pos The time number of samples from the start of the track to convert.
+    * @return The time in seconds.
+    */
+   double LongSamplesToTime(sampleCount pos) const;
 
    // Get access to the (visible) clips in the tracks, in unspecified order
    // (not necessarily sequenced in time).
@@ -499,10 +540,7 @@ private:
    void Merge(const Track &orig) override;
 
    // Resample track (i.e. all clips in the track)
-   void Resample(int rate, BasicUI::ProgressDialog *progress = NULL);
-
-   const TypeInfo &GetTypeInfo() const override;
-   static const TypeInfo &ClassTypeInfo();
+   void Resample(int rate, ProgressDialog *progress = NULL);
 
    int GetLastScaleType() const { return mLastScaleType; }
    void SetLastScaleType() const;
@@ -547,12 +585,9 @@ private:
 
    sampleFormat  mFormat;
    int           mRate;
-   //! Atomic because it may be read by worker threads in playback
-   std::atomic<float> mGain{ 1.0f };
-   //! Atomic because it may be read by worker threads in playback
-   std::atomic<float> mPan{ 0.0f };
+   float         mGain;
+   float         mPan;
    int           mWaveColorIndex;
-   //! A memo used by PortAudio thread, doesn't need atomics:
    float         mOldGain[2];
 
 
@@ -569,11 +604,19 @@ private:
    mutable int           mLastdBRange;
    mutable std::vector <Location> mDisplayLocationsCache;
 
+   //
+   // Protected methods
+   //
+
 private:
-   void DoSetPan(float value);
-   void DoSetGain(float value);
 
    void PasteWaveTrack(double t0, const WaveTrack* other);
+
+   TrackKind GetKind() const override { return TrackKind::Wave; }
+
+   //
+   // Private variables
+   //
 
    SampleBlockFactoryPtr mpFactory;
 
@@ -585,7 +628,62 @@ private:
    std::unique_ptr<WaveformSettings> mpWaveformSettings;
 };
 
-ENUMERATE_TRACK_TYPE(WaveTrack);
+//! A short-lived object, during whose lifetime, the contents of the WaveTrack are assumed not to change.
+/*! It can replace repeated calls to WaveTrack::Get() (each of which opens and closes at least one block).
+ */
+class AUDACITY_DLL_API WaveTrackCache {
+public:
+   WaveTrackCache()
+      : mBufferSize(0)
+      , mOverlapBuffer()
+      , mNValidBuffers(0)
+   {
+   }
+
+   explicit WaveTrackCache(const std::shared_ptr<const WaveTrack> &pTrack)
+      : mBufferSize(0)
+      , mOverlapBuffer()
+      , mNValidBuffers(0)
+   {
+      SetTrack(pTrack);
+   }
+   ~WaveTrackCache();
+
+   const std::shared_ptr<const WaveTrack>& GetTrack() const { return mPTrack; }
+   void SetTrack(const std::shared_ptr<const WaveTrack> &pTrack);
+
+   //! Retrieve samples as floats from the track or from the memory cache
+   /*! Uses fillZero always
+    @return null on failure; this object owns the memory; may be invalidated if GetFloats() is called again
+   */
+   const float *GetFloats(sampleCount start, size_t len, bool mayThrow);
+
+private:
+   void Free();
+
+   struct Buffer {
+      Floats data;
+      sampleCount start;
+      sampleCount len;
+
+      Buffer() : start(0), len(0) {}
+      void Free() { data.reset(); start = 0; len = 0; }
+      sampleCount end() const { return start + len; }
+
+      void swap ( Buffer &other )
+      {
+         data .swap ( other.data );
+         std::swap( start, other.start );
+         std::swap( len, other.len );
+      }
+   };
+
+   std::shared_ptr<const WaveTrack> mPTrack;
+   size_t mBufferSize;
+   Buffer mBuffers[2];
+   GrowableSampleBuffer mOverlapBuffer;
+   int mNValidBuffers;
+};
 
 #include <unordered_set>
 class SampleBlock;
@@ -603,8 +701,8 @@ void VisitBlocks(TrackList &tracks, BlockVisitor visitor,
    SampleBlockIDSet *pIDs = nullptr);
 
 // Non-mutating version of the above
-void InspectBlocks(const TrackList &tracks,
-   BlockInspector inspector, SampleBlockIDSet *pIDs = nullptr);
+void InspectBlocks(const TrackList &tracks, BlockInspector inspector,
+   SampleBlockIDSet *pIDs = nullptr);
 
 class ProjectRate;
 
@@ -630,36 +728,14 @@ class AUDACITY_DLL_API WaveTrackFactory final
    const SampleBlockFactoryPtr &GetSampleBlockFactory() const
    { return mpFactory; }
 
-   /**
-    * \brief Creates an unnamed empty WaveTrack with default sample format and default rate
-    * \return Orphaned WaveTrack
-    */
-   std::shared_ptr<WaveTrack> Create();
-
-   /**
-    * \brief Creates an unnamed empty WaveTrack with custom sample format and custom rate
-    * \param format Desired sample format
-    * \param rate Desired sample rate
-    * \return Orphaned WaveTrack
-    */
-   std::shared_ptr<WaveTrack> Create(sampleFormat format, double rate);
-
  private:
    const ProjectRate &mRate;
    SampleBlockFactoryPtr mpFactory;
+ public:
+   std::shared_ptr<WaveTrack> DuplicateWaveTrack(const WaveTrack &orig);
+   std::shared_ptr<WaveTrack> NewWaveTrack(
+      sampleFormat format = (sampleFormat)0,
+      double rate = 0);
 };
-
-extern AUDACITY_DLL_API BoolSetting
-     EditClipsCanMove
-;
-
-extern AUDACITY_DLL_API StringSetting AudioTrackNameSetting;
-
-AUDACITY_DLL_API bool GetEditClipsCanMove();
-
-// Generate a registry for serialized data
-#include "XMLMethodRegistry.h"
-using WaveTrackIORegistry = XMLMethodRegistry<WaveTrack>;
-DECLARE_XML_METHOD_REGISTRY( AUDACITY_DLL_API, WaveTrackIORegistry );
 
 #endif // __AUDACITY_WAVETRACK__

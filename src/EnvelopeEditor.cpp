@@ -18,7 +18,6 @@
 
 #include "AColor.h"
 #include "Envelope.h"
-#include "TrackArt.h"
 #include "TrackArtist.h"
 #include "TrackPanelDrawingContext.h"
 #include "ViewInfo.h"

@@ -36,7 +36,6 @@ Paul Licameli split from TrackPanel.cpp
 #include "AllThemeResources.h"
 #include "Prefs.h"
 #include "Project.h"
-#include "SyncLock.h"
 #include "Theme.h"
 #include "Track.h"
 #include "TrackPanelDrawingContext.h"
@@ -377,7 +376,7 @@ void TrackInfo::MinimizeSyncLockDrawFunction
 {
    auto dc = &context.dc;
    bool selected = pTrack ? pTrack->GetSelected() : true;
-   bool syncLockSelected = pTrack ? SyncLock::IsSyncLockSelected(pTrack) : true;
+   bool syncLockSelected = pTrack ? pTrack->IsSyncLockSelected() : true;
    bool minimized =
       pTrack ? TrackView::Get( *pTrack ).GetMinimized() : false;
    {

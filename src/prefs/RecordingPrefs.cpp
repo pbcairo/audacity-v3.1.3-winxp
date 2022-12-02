@@ -53,12 +53,12 @@ RecordingPrefs::~RecordingPrefs()
 {
 }
 
-ComponentInterfaceSymbol RecordingPrefs::GetSymbol() const
+ComponentInterfaceSymbol RecordingPrefs::GetSymbol()
 {
    return RECORDING_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString RecordingPrefs::GetDescription() const
+TranslatableString RecordingPrefs::GetDescription()
 {
    return XO("Preferences for Recording");
 }

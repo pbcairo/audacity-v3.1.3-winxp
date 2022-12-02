@@ -39,7 +39,9 @@
 
 #include "InconsistencyException.h"
 
-#include "TimeWarper.h"
+#include "effects/TimeWarper.h"
+#include "tracks/ui/TrackView.h"
+#include "tracks/ui/TrackControls.h"
 
 #include "AllThemeResources.h"
 #include "Theme.h"
@@ -109,27 +111,31 @@ SONFNS(AutoSave)
 
 static ProjectFileIORegistry::ObjectReaderEntry readerEntry{
    "notetrack",
-   NoteTrack::New
+   []( AudacityProject &project ){
+      auto &tracks = TrackList::Get( project );
+      auto result = tracks.Add( std::make_shared<NoteTrack>());
+      TrackView::Get( *result );
+      TrackControls::Get( *result );
+      return result;
+   }
 };
-
-NoteTrack *NoteTrack::New( AudacityProject &project )
-{
-   auto &tracks = TrackList::Get( project );
-   auto result = tracks.Add( std::make_shared<NoteTrack>());
-   result->AttachedTrackObjects::BuildAll();
-   return result;
-}
 
 NoteTrack::NoteTrack()
    : NoteTrackBase()
 {
-   SetName(_("Note Track"));
+   SetDefaultName(_("Note Track"));
+   SetName(GetDefaultName());
 
    mSeq = NULL;
    mSerializationLength = 0;
 
+#ifdef EXPERIMENTAL_MIDI_OUT
+   mVelocity = 0;
+#endif
    mBottomNote = MinPitch;
    mTopNote = MaxPitch;
+
+   mVisibleChannels = ALL_CHANNELS;
 }
 
 NoteTrack::~NoteTrack()
@@ -190,7 +196,7 @@ Track::Holder NoteTrack::Clone() const
    // copy some other fields here
    duplicate->SetBottomNote(mBottomNote);
    duplicate->SetTopNote(mTopNote);
-   duplicate->SetVisibleChannels(GetVisibleChannels());
+   duplicate->mVisibleChannels = mVisibleChannels;
    duplicate->SetOffset(GetOffset());
 #ifdef EXPERIMENTAL_MIDI_OUT
    duplicate->SetVelocity(GetVelocity());
@@ -632,15 +638,10 @@ void NoteTrack::InsertSilence(double t, double len)
 #ifdef EXPERIMENTAL_MIDI_OUT
 void NoteTrack::SetVelocity(float velocity)
 {
-   if (GetVelocity() != velocity) {
-      DoSetVelocity(velocity);
+   if (mVelocity != velocity) {
+      mVelocity = velocity;
       Notify();
    }
-}
-
-void NoteTrack::DoSetVelocity(float velocity)
-{
-   mVelocity.store(velocity, std::memory_order_relaxed);
 }
 #endif
 
@@ -684,28 +685,9 @@ QuantizedTimeAndBeat NoteTrack::NearestBeatTime( double time ) const
    return { seq_time + GetOffset(), beat };
 }
 
-static const Track::TypeInfo &typeInfo()
-{
-   static const Track::TypeInfo info{
-      { "note", "midi", XO("Note Track") }, true,
-      &PlayableTrack::ClassTypeInfo() };
-   return info;
-}
-
-auto NoteTrack::GetTypeInfo() const -> const TypeInfo &
-{
-   return typeInfo();
-}
-
-auto NoteTrack::ClassTypeInfo() -> const TypeInfo &
-{
-   return typeInfo();
-}
-
 Track::Holder NoteTrack::PasteInto( AudacityProject & ) const
 {
    auto pNewTrack = std::make_shared<NoteTrack>();
-   pNewTrack->Init(*this);
    pNewTrack->Paste(0.0, this);
    return pNewTrack;
 }
@@ -930,11 +912,11 @@ bool NoteTrack::HandleXMLTag(const std::string_view& tag, const AttributesList &
              if (!value.TryGet(nValue) ||
                  !IsValidVisibleChannels(nValue))
                  return false;
-             SetVisibleChannels(nValue);
+             mVisibleChannels = nValue;
          }
 #ifdef EXPERIMENTAL_MIDI_OUT
          else if (attr == "velocity" && value.TryGet(dblValue))
-            DoSetVelocity(static_cast<float>(dblValue));
+            mVelocity = (float) dblValue;
 #endif
          else if (attr == "bottomnote" && value.TryGet(nValue))
             SetBottomNote(nValue);
@@ -973,12 +955,10 @@ void NoteTrack::WriteXML(XMLWriter &xmlFile) const
    saveme->Track::WriteCommonXMLAttributes( xmlFile );
    this->NoteTrackBase::WriteXMLAttributes(xmlFile);
    xmlFile.WriteAttr(wxT("offset"), saveme->GetOffset());
-   xmlFile.WriteAttr(wxT("visiblechannels"),
-      static_cast<int>(saveme->GetVisibleChannels()));
+   xmlFile.WriteAttr(wxT("visiblechannels"), saveme->mVisibleChannels);
 
 #ifdef EXPERIMENTAL_MIDI_OUT
-   xmlFile.WriteAttr(wxT("velocity"),
-      static_cast<double>(saveme->GetVelocity()));
+   xmlFile.WriteAttr(wxT("velocity"), (double) saveme->mVelocity);
 #endif
    xmlFile.WriteAttr(wxT("bottomnote"), saveme->mBottomNote);
    xmlFile.WriteAttr(wxT("topnote"), saveme->mTopNote);

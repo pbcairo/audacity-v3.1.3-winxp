@@ -6,11 +6,9 @@
 #include "Prefs.h"
 #include "Project.h"
 #include "../ProjectAudioIO.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "../ProjectSettings.h"
-#include "../ProjectWindow.h"
-#include "../SelectUtilities.h"
-#include "../SyncLock.h"
+#include "../SelectFile.h"
 #include "../TrackPanelAx.h"
 #include "../TrackPanel.h"
 #include "ViewInfo.h"
@@ -18,9 +16,6 @@
 #include "../commands/CommandContext.h"
 #include "../commands/CommandManager.h"
 #include "../tracks/labeltrack/ui/LabelTrackView.h"
-
-using Region = WaveTrack::Region;
-using Regions = WaveTrack::Regions;
 
 // private helper classes and functions
 namespace {
@@ -79,7 +74,7 @@ int DoAddLabel(
 
    // If none found, start a NEW label track and use it
    if (!lt)
-      lt = LabelTrack::Create(tracks);
+      lt = tracks.Add( std::make_shared<LabelTrack>() );
 
 // LLL: Commented as it seemed a little forceful to remove users
 //      selection when adding the label.  This does not happen if
@@ -184,7 +179,7 @@ void EditByLabel(AudacityProject &project,
    {
       const bool playable = dynamic_cast<const PlayableTrack *>(t) != nullptr;
 
-      if (SyncLock::IsSyncLockSelected(t) || notLocked && playable)
+      if (t->IsSyncLockSelected() || notLocked && playable)
       {
          for (int i = (int)regions.size() - 1; i >= 0; i--)
          {
@@ -230,7 +225,7 @@ void EditClipboardByLabel( AudacityProject &project,
    {
       const bool playable = dynamic_cast<const PlayableTrack *>(t) != nullptr;
 
-      if (SyncLock::IsSyncLockSelected(t) || notLocked && playable)
+      if (t->IsSyncLockSelected() || notLocked && playable)
       {
          // This track accumulates the needed clips, right to left:
          Track::Holder merged;
@@ -339,7 +334,7 @@ void OnPasteNewLabel(const CommandContext &context)
 
          // If no match found, add one
          if (!t)
-            t = LabelTrack::Create(tracks);
+            t = tracks.Add( std::make_shared<LabelTrack>() );
 
          // Select this track so the loop picks it up
          t->SetSelected(true);
@@ -661,7 +656,6 @@ void OnDisjoinLabels(const CommandContext &context)
       track->TypeSwitch(
          [&](WaveTrack *t)
          {
-            wxBusyCursor busy;
             t->Disjoin(t0, t1);
          }
       );
@@ -675,24 +669,6 @@ void OnDisjoinLabels(const CommandContext &context)
       XO( "Detached labeled audio regions" ),
       /* i18n-hint: (verb)*/
       XO( "Detach Labeled Audio" ) );
-}
-
-void OnNewLabelTrack(const CommandContext &context)
-{
-   auto &project = context.project;
-   auto &tracks = TrackList::Get( project );
-
-   auto track = LabelTrack::Create(tracks);
-
-   SelectUtilities::SelectNone( project );
-
-   track->SetSelected(true);
-
-   ProjectHistory::Get( project )
-      .PushState(XO("Created new label track"), XO("New Track"));
-
-   TrackFocus::Get(project).Set(track);
-   track->EnsureVisible();
 }
 
 }; // struct Handler
@@ -818,12 +794,6 @@ AttachedItem sAttachment1{
    Shared( LabelEditMenus() )
 };
 
-AttachedItem sAttachment2{ wxT("Tracks/Add/Add"),
-   ( FinderScope{ findCommandHandler },
-   Command( wxT("NewLabelTrack"), XXO("&Label Track"),
-      FN(OnNewLabelTrack), AudioIONotBusyFlag() )
-   )
-};
-
 }
+
 #undef FN

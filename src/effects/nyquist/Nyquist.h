@@ -13,8 +13,6 @@
 
 #include "../Effect.h"
 #include "FileNames.h"
-#include "SampleCount.h"
-#include "../../widgets/wxPanelWrapper.h"
 
 #include "nyx.h"
 
@@ -62,17 +60,8 @@ public:
    int ticks;
 };
 
-struct NyquistSettings {
-   // other settings, for the Nyquist prompt; else null
-   EffectSettings proxySettings;
-   bool proxyDebug{ false };
-   std::vector<NyqControl> controls;
 
-   // Other fields, to do
-};
-
-class AUDACITY_DLL_API NyquistEffect final
-   : public EffectWithSettings<NyquistSettings, StatefulEffect>
+class AUDACITY_DLL_API NyquistEffect final : public Effect
 {
 public:
 
@@ -84,51 +73,40 @@ public:
 
    // ComponentInterface implementation
 
-   PluginPath GetPath() const override;
-   ComponentInterfaceSymbol GetSymbol() const override;
-   VendorSymbol GetVendor() const override;
-   wxString GetVersion() const override;
-   TranslatableString GetDescription() const override;
+   PluginPath GetPath() override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   VendorSymbol GetVendor() override;
+   wxString GetVersion() override;
+   TranslatableString GetDescription() override;
    
-   ManualPageID ManualPage() const override;
-   FilePath HelpPage() const override;
+   ManualPageID ManualPage() override;
+   FilePath HelpPage() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   EffectType GetClassification() const override;
-   EffectFamilySymbol GetFamily() const override;
-   bool IsInteractive() const override;
-   bool IsDefault() const override;
-   bool EnablesDebug() const override;
+   EffectType GetType() override;
+   EffectType GetClassification() override;
+   EffectFamilySymbol GetFamily() override;
+   bool IsInteractive() override;
+   bool IsDefault() override;
 
-   bool SaveSettings(
-      const EffectSettings &settings, CommandParameters & parms) const override;
-   bool LoadSettings(
-      const CommandParameters & parms, EffectSettings &settings) const override;
-   bool DoLoadSettings(
-      const CommandParameters & parms, EffectSettings &settings);
+   // EffectClientInterface implementation
 
-   bool VisitSettings(SettingsVisitor &visitor, EffectSettings &settings)
-      override;
-   bool VisitSettings(
-      ConstSettingsVisitor &visitor, const EffectSettings &settings)
-      const override;
-   int SetLispVarsFromParameters(const CommandParameters & parms, bool bTestOnly);
+   bool DefineParams( ShuttleParams & S ) override;
+   bool GetAutomationParameters(CommandParameters & parms) override;
+   bool SetAutomationParameters(CommandParameters & parms) override;
+   int SetLispVarsFromParameters(CommandParameters & parms, bool bTestOnly);
 
    // Effect implementation
 
    bool Init() override;
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
-   int ShowHostInterface( wxWindow &parent,
-      const EffectDialogFactory &factory,
-      std::shared_ptr<EffectInstance> &pInstance, EffectSettingsAccess &access,
-      bool forceModal = false) override;
-   std::unique_ptr<EffectUIValidator> PopulateOrExchange(
-      ShuttleGui & S, EffectInstance &instance,
-      EffectSettingsAccess &access, const EffectOutputs *pOutputs) override;
-   bool TransferDataToWindow(const EffectSettings &settings) override;
-   bool TransferDataFromWindow(EffectSettings &settings) override;
+   bool CheckWhetherSkipEffect() override;
+   bool Process() override;
+   bool ShowInterface( wxWindow &parent,
+      const EffectDialogFactory &factory, bool forceModal = false) override;
+   void PopulateOrExchange(ShuttleGui & S) override;
+   bool TransferDataToWindow() override;
+   bool TransferDataFromWindow() override;
 
    // NyquistEffect implementation
    // For Nyquist Workbench support
@@ -202,7 +180,7 @@ private:
                            wxString *pExtraString = nullptr);
    static wxString UnQuote(const wxString &s, bool allowParens = true,
                            wxString *pExtraString = nullptr);
-   static double GetCtrlValue(const wxString &s);
+   double GetCtrlValue(const wxString &s);
 
    void OnLoad(wxCommandEvent & evt);
    void OnSave(wxCommandEvent & evt);
@@ -214,11 +192,9 @@ private:
    void OnTime(wxCommandEvent & evt);
    void OnFileButton(wxCommandEvent & evt);
 
-   static void resolveFilePath(wxString & path, FileExtension extension = {});
+   void resolveFilePath(wxString & path, FileExtension extension = {});
    bool validatePath(wxString path);
    wxString ToTimeFormat(double t);
-
-   std::pair<bool, FilePath> CheckHelpPage() const;
 
 private:
 
@@ -261,7 +237,6 @@ private:
    wxString          mManPage;   // ONLY use if a help page exists in the manual.
    wxString          mHelpFile;
    bool              mHelpFileExists;
-   FilePath          mHelpPage;
    EffectType        mType;
    EffectType        mPromptType; // If a prompt, need to remember original type.
 

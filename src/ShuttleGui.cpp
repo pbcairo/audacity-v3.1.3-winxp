@@ -98,7 +98,6 @@ for registering for changes.
 
 
 
-#include "MemoryX.h"
 #include "Prefs.h"
 #include "ShuttlePrefs.h"
 #include "Theme.h"
@@ -1130,7 +1129,7 @@ void InvisiblePanel::OnPaint( wxPaintEvent & WXUNUSED(event))
    // event.Skip(); // swallow the paint event.
 }
 
-wxPanel * ShuttleGuiBase::StartInvisiblePanel(int border)
+wxPanel * ShuttleGuiBase::StartInvisiblePanel()
 {
    UseUpId();
    if( mShuttleMode != eIsCreating )
@@ -1143,7 +1142,7 @@ wxPanel * ShuttleGuiBase::StartInvisiblePanel(int border)
       wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE)
       );
    SetProportions( 1 );
-   miBorder = border;
+   miBorder=0;
    UpdateSizers();  // adds window in to current sizer.
 
    // create a sizer within the window...
@@ -1593,7 +1592,7 @@ wxRadioButton * ShuttleGuiBase::TieRadioButton()
 }
 
 /// Call this before any TieRadioButton calls.
-void ShuttleGuiBase::StartRadioButtonGroup(ChoiceSetting &Setting)
+void ShuttleGuiBase::StartRadioButtonGroup( const ChoiceSetting &Setting )
 {
    mRadioSymbols = Setting.GetSymbols();
 
@@ -1969,8 +1968,9 @@ wxTextCtrl * ShuttleGuiBase::TieNumericTextBox(
 ///   @param Setting            Encapsulates setting name, internal and visible
 ///                             choice strings, and a designation of one of
 ///                             those as default.
-wxChoice *ShuttleGuiBase::TieChoice(const TranslatableString &Prompt,
-   ChoiceSetting &choiceSetting)
+wxChoice *ShuttleGuiBase::TieChoice(
+   const TranslatableString &Prompt,
+   const ChoiceSetting &choiceSetting )
 {
    // Do this to force any needed migrations first
    choiceSetting.Read();
@@ -1993,7 +1993,7 @@ wxChoice *ShuttleGuiBase::TieChoice(const TranslatableString &Prompt,
    if( DoStep(1) ) TempIndex = TranslateToIndex( TempStr, InternalChoices ); // To an index
    if( DoStep(2) ) pChoice = TieChoice( Prompt, TempIndex, Choices );
    if( DoStep(3) ) TempStr = TranslateFromIndex( TempIndex, InternalChoices ); // To a string
-   if( DoStep(3) ) choiceSetting.Write(TempStr); // Put into Prefs.
+   if( DoStep(3) ) DoDataShuttle( SettingName, WrappedRef ); // Put into Prefs.
    return pChoice;
 }
 
@@ -2008,8 +2008,9 @@ wxChoice *ShuttleGuiBase::TieChoice(const TranslatableString &Prompt,
 ///   @param Choices            An array of choices that appear on screen.
 ///   @param pInternalChoices   The corresponding values (as an integer array)
 ///                             if null, then use 0, 1, 2, ...
-wxChoice * ShuttleGuiBase::TieNumberAsChoice(const TranslatableString &Prompt,
-   IntSetting &Setting,
+wxChoice * ShuttleGuiBase::TieNumberAsChoice(
+   const TranslatableString &Prompt,
+   const IntSetting & Setting,
    const TranslatableStrings & Choices,
    const std::vector<int> * pInternalChoices,
    int iNoMatchSelector)
@@ -2024,6 +2025,7 @@ wxChoice * ShuttleGuiBase::TieNumberAsChoice(const TranslatableString &Prompt,
       for ( int ii = 0; ii < (int)Choices.size(); ++ii )
          InternalChoices.push_back( fn( ii ) );
 
+
    const auto Default = Setting.GetDefault();
 
    miNoMatchSelector = iNoMatchSelector;
@@ -2037,7 +2039,7 @@ wxChoice * ShuttleGuiBase::TieNumberAsChoice(const TranslatableString &Prompt,
       defaultIndex = -1;
 
    ChoiceSetting choiceSetting{
-      Setting,
+      Setting.GetPath(),
       {
          ByColumns,
          Choices,
@@ -2046,7 +2048,7 @@ wxChoice * ShuttleGuiBase::TieNumberAsChoice(const TranslatableString &Prompt,
       defaultIndex
    };
 
-   return ShuttleGuiBase::TieChoice(Prompt, choiceSetting);
+   return ShuttleGuiBase::TieChoice( Prompt, choiceSetting );
 }
 
 //------------------------------------------------------------------//

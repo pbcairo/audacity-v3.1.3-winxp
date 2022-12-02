@@ -24,7 +24,7 @@
 #include <wx/defs.h>
 
 #include "Languages.h"
-#include "PluginManager.h"
+#include "../PluginManager.h"
 #include "Prefs.h"
 #include "../ShuttleGui.h"
 
@@ -38,12 +38,12 @@ EffectsPrefs::~EffectsPrefs()
 {
 }
 
-ComponentInterfaceSymbol EffectsPrefs::GetSymbol() const
+ComponentInterfaceSymbol EffectsPrefs::GetSymbol()
 {
    return EFFECTS_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString EffectsPrefs::GetDescription() const
+TranslatableString EffectsPrefs::GetDescription()
 {
    return XO("Preferences for Effects");
 }
@@ -74,7 +74,6 @@ ChoiceSetting EffectsGroupBy{
          XO("Sorted by Type and Effect Name") ,
          XO("Grouped by Publisher") ,
          XO("Grouped by Type") ,
-         XO("Default")
       },
       {
          wxT("sortby:name") ,
@@ -82,10 +81,9 @@ ChoiceSetting EffectsGroupBy{
          wxT("sortby:type:name") ,
          wxT("groupby:publisher") ,
          wxT("groupby:type") ,
-         wxT("default")
       }
    },
-   5 // "default"
+   0 // "sortby:name"
 };
 
 namespace {
@@ -214,6 +212,19 @@ void EffectsPrefs::PopulateOrExchange(ShuttleGui & S)
       S.EndMultiColumn();
    }
    S.EndStatic();
+
+#ifndef EXPERIMENTAL_EFFECT_MANAGEMENT
+   S.StartStatic(XO("Plugin Options"));
+   {
+      S.TieCheckBox(XXO("Check for updated plugins when Audacity starts"),
+                     {wxT("/Plugins/CheckForUpdates"),
+                     true});
+      S.TieCheckBox(XXO("Rescan plugins next time Audacity is started"),
+                     {wxT("/Plugins/Rescan"),
+                     false});
+   }
+   S.EndStatic();
+#endif
 
 #ifdef EXPERIMENTAL_EQ_SSE_THREADED
    S.StartStatic(XO("Instruction Set"));

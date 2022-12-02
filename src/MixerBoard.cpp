@@ -46,7 +46,7 @@
 #include "ProjectWindows.h"
 #include "SelectUtilities.h"
 #include "Theme.h"
-#include "TrackPanel.h"
+#include "TrackPanel.h" // for EVT_TRACK_PANEL_TIMER
 #include "TrackUtilities.h"
 #include "UndoManager.h"
 #include "WaveTrack.h"
@@ -65,7 +65,7 @@
 
 #include "commands/CommandManager.h"
 
-#define AudacityMixerBoardTitle XO("Audacity Mixer%s")
+#define AudacityMixerBoardTitle XO("Audacity Mixer Board%s")
 
 // class MixerTrackSlider
 
@@ -922,27 +922,34 @@ MixerBoard::MixerBoard(AudacityProject* pProject,
    mTracks = &TrackList::Get( *mProject );
 
    // Events from the project don't propagate directly to this other frame, so...
-   mPlaybackScrollerSubscription =
-   ProjectWindow::Get( *mProject ).GetPlaybackScroller()
-      .Subscribe(*this, &MixerBoard::OnTimer);
+   mProject->Bind(EVT_TRACK_PANEL_TIMER,
+      &MixerBoard::OnTimer,
+      this);
 
-   mTrackPanelSubscription =
-   mTracks->Subscribe([this](const TrackListEvent &event){
-      switch (event.mType) {
-      case TrackListEvent::SELECTION_CHANGE:
-      case TrackListEvent::TRACK_DATA_CHANGE:
-         OnTrackChanged(event); break;
-      case TrackListEvent::PERMUTED:
-      case TrackListEvent::ADDITION:
-      case TrackListEvent::DELETION:
-         OnTrackSetChanged(); break;
-      default:
-         break;
-      }
-   });
+   mTracks->Bind(EVT_TRACKLIST_SELECTION_CHANGE,
+      &MixerBoard::OnTrackChanged,
+      this);
 
-   mAudioIOSubscription =
-      AudioIO::Get()->Subscribe(*this, &MixerBoard::OnStartStop);
+   mTracks->Bind(EVT_TRACKLIST_PERMUTED,
+      &MixerBoard::OnTrackSetChanged,
+      this);
+
+   mTracks->Bind(EVT_TRACKLIST_ADDITION,
+      &MixerBoard::OnTrackSetChanged,
+      this);
+
+   mTracks->Bind(EVT_TRACKLIST_DELETION,
+      &MixerBoard::OnTrackSetChanged,
+      this);
+
+   mTracks->Bind(EVT_TRACKLIST_TRACK_DATA_CHANGE,
+      &MixerBoard::OnTrackChanged,
+      this);
+
+   wxTheApp->Connect(EVT_AUDIOIO_PLAYBACK,
+      wxCommandEventHandler(MixerBoard::OnStartStop),
+      NULL,
+      this);
 }
 
 
@@ -1307,7 +1314,7 @@ void MixerBoard::LoadMusicalInstruments()
    wxMemoryDC dc;
 
    for (const auto &data : table) {
-      auto bmp = std::make_unique<wxBitmap>(data.bitmap);
+      auto bmp = std::make_unique<wxBitmap>(data.bitmap,24);
       dc.SelectObject(*bmp);
       AColor::Bevel(dc, false, bev);
       mMusicalInstruments.push_back(std::make_unique<MusicalInstrument>(
@@ -1338,7 +1345,7 @@ void MixerBoard::OnSize(wxSizeEvent &evt)
    this->RefreshTrackClusters(true);
 }
 
-void MixerBoard::OnTimer(Observer::Message)
+void MixerBoard::OnTimer(wxCommandEvent &event)
 {
    // PRL 12 Jul 2015:  Moved the below (with comments) out of TrackPanel::OnTimer.
 
@@ -1361,10 +1368,15 @@ void MixerBoard::OnTimer(Observer::Message)
             == PlayMode::loopedPlay)
       );
    }
+
+   // Let other listeners get the notification
+   event.Skip();
 }
 
-void MixerBoard::OnTrackChanged(const TrackListEvent &evt)
+void MixerBoard::OnTrackChanged(TrackListEvent &evt)
 {
+   evt.Skip();
+
    auto pTrack = evt.mpTrack.lock();
    auto pPlayable = dynamic_cast<PlayableTrack*>( pTrack.get() );
    if ( pPlayable ) {
@@ -1375,17 +1387,19 @@ void MixerBoard::OnTrackChanged(const TrackListEvent &evt)
    }
 }
 
-void MixerBoard::OnTrackSetChanged()
+void MixerBoard::OnTrackSetChanged(wxEvent &evt)
 {
+   evt.Skip();
    mUpToDate = false;
    UpdateTrackClusters();
    Refresh();
 }
 
-void MixerBoard::OnStartStop(AudioIOEvent evt)
+void MixerBoard::OnStartStop(wxCommandEvent &evt)
 {
-   if (evt.type == AudioIOEvent::PLAYBACK)
-      ResetMeters( evt.on );
+   evt.Skip();
+   bool start = evt.GetInt();
+   ResetMeters( start );
 }
 
 // class MixerBoardFrame
@@ -1553,7 +1567,7 @@ CommandHandlerObject &findCommandHandler(AudacityProject &) {
 using namespace MenuTable;
 AttachedItem sAttachment{ wxT("View/Windows"),
    ( FinderScope{ findCommandHandler },
-      Command( wxT("MixerBoard"), XXO("&Mixer"), &Handler::OnMixerBoard,
+      Command( wxT("MixerBoard"), XXO("&Mixer Board..."), &Handler::OnMixerBoard,
          PlayableTracksExistFlag()) )
 };
 

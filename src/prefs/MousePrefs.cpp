@@ -72,12 +72,12 @@ MousePrefs::~MousePrefs()
 {
 }
 
-ComponentInterfaceSymbol MousePrefs::GetSymbol() const
+ComponentInterfaceSymbol MousePrefs::GetSymbol()
 {
    return MOUSE_PREFS_PLUGIN_SYMBOL;
 }
 
-TranslatableString MousePrefs::GetDescription() const
+TranslatableString MousePrefs::GetDescription()
 {
    return XO("Preferences for Mouse");
 }

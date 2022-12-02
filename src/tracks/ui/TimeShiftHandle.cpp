@@ -15,16 +15,15 @@ Paul Licameli split from TrackPanel.cpp
 #include "AColor.h"
 #include "../../HitTestResult.h"
 #include "../../ProjectAudioIO.h"
-#include "ProjectHistory.h"
+#include "../../ProjectHistory.h"
 #include "../../ProjectSettings.h"
 #include "../../RefreshCode.h"
 #include "../../Snap.h"
-#include "../../SyncLock.h"
-#include "Track.h"
+#include "../../Track.h"
 #include "../../TrackArtist.h"
 #include "../../TrackPanelDrawingContext.h"
 #include "../../TrackPanelMouseEvent.h"
-#include "UndoManager.h"
+#include "../../UndoManager.h"
 #include "ViewInfo.h"
 #include "../../../images/Cursors.h"
 
@@ -383,7 +382,7 @@ void ClipMoveState::Init(
             if (!shifter.SyncLocks())
                continue;
             auto &track = shifter.GetTrack();
-            auto group = SyncLock::Group(&track);
+            auto group = TrackList::SyncLockGroup(&track);
             if ( group.size() <= 1 )
                continue;
 
@@ -982,7 +981,7 @@ UIHandle::Result TimeShiftHandle::Release
       msg = XO("Moved clips to another track");
       consolidate = false;
       for (auto& pair : mClipMoveState.shifters)
-         pair.first->LinkConsistencyFix();
+         pair.first->LinkConsistencyCheck();
    }
    else {
       msg = ( mClipMoveState.hSlideAmount > 0

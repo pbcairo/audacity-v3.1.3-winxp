@@ -17,7 +17,7 @@ Paul Licameli split from TrackPanel.cpp
 
 #include "../../../../HitTestResult.h"
 #include "../../../../NoteTrack.h"
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelMouseEvent.h"
@@ -226,6 +226,6 @@ void NoteTrackVRulerControls::UpdateRuler( const wxRect &rect )
    vruler->SetBounds(rect.x, rect.y, rect.x + 1, rect.y + rect.height-1);
    vruler->SetOrientation(wxVERTICAL);
 
-   vruler->GetMaxSize( &nt->vrulerSize.first, &nt->vrulerSize.second );
+   vruler->GetMaxSize( &nt->vrulerSize.x, &nt->vrulerSize.y );
 }
 #endif

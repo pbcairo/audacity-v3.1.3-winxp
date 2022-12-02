@@ -13,9 +13,6 @@
 
 #include <vector>
 #include "ToolBar.h"
-#include "Observer.h"
-
-enum class DeviceChangeMessage : char;
 
 class wxSize;
 class wxPoint;
@@ -59,7 +56,7 @@ class DeviceToolBar final : public ToolBar {
    void ShowChannelsDialog();
 
  private:
-   void OnRescannedDevices(DeviceChangeMessage);
+   void OnRescannedDevices( wxEvent& );
 
    int  ChangeHost();
    void ChangeDevice(bool isInput);
@@ -77,15 +74,11 @@ class DeviceToolBar final : public ToolBar {
    wxChoice *mInputChannels;
    wxChoice *mHost;
 
-   Observer::Subscription mSubscription;
-
  public:
 
    DECLARE_CLASS(DeviceToolBar)
    DECLARE_EVENT_TABLE()
 };
-
-int DeviceToolbarPrefsID();
 
 #endif
 

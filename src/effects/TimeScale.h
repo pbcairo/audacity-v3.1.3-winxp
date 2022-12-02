@@ -16,7 +16,6 @@
 #if USE_SBSMS
 
 #include "SBSMSEffect.h"
-#include "../ShuttleAutomation.h"
 
 class wxSlider;
 class wxTextCtrl;
@@ -25,8 +24,6 @@ class ShuttleGui;
 class EffectTimeScale final : public EffectSBSMS
 {
 public:
-   static inline EffectTimeScale *
-   FetchParameters(EffectTimeScale &e, EffectSettings &) { return &e; }
    static const ComponentInterfaceSymbol Symbol;
 
    EffectTimeScale();
@@ -34,32 +31,36 @@ public:
 
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
-   ManualPageID ManualPage() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
+   ManualPageID ManualPage() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
+   EffectType GetType() override;
+
+   // EffectClientInterface implementation
+
+   bool DefineParams( ShuttleParams & S ) override;
+   bool GetAutomationParameters(CommandParameters & parms) override;
+   bool SetAutomationParameters(CommandParameters & parms) override;
 
    // Effect implementation
 
-   void Preview(EffectSettingsAccess &access, bool dryOnly) override;
-   bool Process(EffectInstance &instance, EffectSettings &settings) override;
-   std::unique_ptr<EffectUIValidator> PopulateOrExchange(
-      ShuttleGui & S, EffectInstance &instance,
-      EffectSettingsAccess &access, const EffectOutputs *pOutputs) override;
-   bool TransferDataToWindow(const EffectSettings &settings) override;
-   bool TransferDataFromWindow(EffectSettings &settings) override;
-   double CalcPreviewInputLength(
-      const EffectSettings &settings, double previewLength) const override;
+   bool Init() override;
+   void Preview(bool dryOnly) override;
+   bool Process() override;
+   void PopulateOrExchange(ShuttleGui & S) override;
+   bool TransferDataToWindow() override;
+   bool TransferDataFromWindow() override;
+   double CalcPreviewInputLength(double previewLength) override;
 
 private:
    // EffectTimeScale implementation
 
-   static inline double PercentChangeToRatio(double percentChange);
-   static inline double HalfStepsToPercentChange(double halfSteps);
-   static inline double PercentChangeToHalfSteps(double percentChange);
+   inline double PercentChangeToRatio(double percentChange);
+   inline double HalfStepsToPercentChange(double halfSteps);
+   inline double PercentChangeToHalfSteps(double percentChange);
 
    void OnText_RatePercentChangeStart(wxCommandEvent & evt);
    void OnText_RatePercentChangeEnd(wxCommandEvent & evt);
@@ -80,6 +81,7 @@ private:
    void Update_Slider_RatePercentChangeStart();
    void Update_Slider_RatePercentChangeEnd();
 
+private:
    bool bPreview;
    double previewSelectedDuration;
    SlideType slideTypeRate;
@@ -100,21 +102,7 @@ private:
    wxTextCtrl *m_pTextCtrl_PitchPercentChangeStart;
    wxTextCtrl *m_pTextCtrl_PitchPercentChangeEnd;
 
-   const EffectParameterMethods& Parameters() const override;
    DECLARE_EVENT_TABLE()
-
-static constexpr EffectParameter RatePercentStart{ &EffectTimeScale::m_RatePercentChangeStart,
-   L"RatePercentChangeStart",  0.0,  -90.0,   500,   1  };
-static constexpr EffectParameter RatePercentEnd{ &EffectTimeScale::m_RatePercentChangeEnd,
-   L"RatePercentChangeEnd",    0.0,  -90.0,   500,   1  };
-static constexpr EffectParameter HalfStepsStart{ &EffectTimeScale::m_PitchHalfStepsStart,
-   L"PitchHalfStepsStart",     0.0,  -12.0,   12.0,  1  };
-static constexpr EffectParameter HalfStepsEnd{ &EffectTimeScale::m_PitchHalfStepsEnd,
-   L"PitchHalfStepsEnd",       0.0,  -12.0,   12.0,  1  };
-static constexpr EffectParameter PitchPercentStart{ &EffectTimeScale::m_PitchPercentChangeStart,
-   L"PitchPercentChangeStart", 0.0,  -50.0,   100.0, 1  };
-static constexpr EffectParameter PitchPercentEnd{ &EffectTimeScale::m_PitchPercentChangeEnd,
-   L"PitchPercentChangeEnd",   0.0,  -50.0,   100.0, 1  };
 };
 
 #endif // __AUDACITY_EFFECT_TIMESCALE

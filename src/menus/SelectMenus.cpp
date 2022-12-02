@@ -8,14 +8,13 @@
 #include "Project.h"
 #include "../ProjectAudioIO.h"
 #include "../ProjectAudioManager.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "ProjectRate.h"
 #include "../ProjectSelectionManager.h"
 #include "../ProjectSettings.h"
 #include "../ProjectWindow.h"
 #include "../ProjectWindows.h"
 #include "../SelectUtilities.h"
-#include "../SyncLock.h"
 #include "../TrackPanel.h"
 #include "../WaveTrack.h"
 #include "../LabelTrack.h"
@@ -507,7 +506,7 @@ void OnSelectSyncLockSel(const CommandContext &context)
 
    bool selected = false;
    for (auto t : tracks.Any() + &Track::SupportsBasicEditing
-         + &SyncLock::IsSyncLockSelected - &Track::IsSelected) {
+         + &Track::IsSyncLockSelected - &Track::IsSelected) {
       t->SetSelected(true);
       selected = true;
    }

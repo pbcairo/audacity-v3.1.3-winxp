@@ -20,7 +20,6 @@
 class AudacityProject;
 class wxTreebook;
 class wxTreeEvent;
-class SettingTransaction;
 class ShuttleGui;
 
 #ifdef __GNUC__
@@ -72,8 +71,6 @@ private:
    PrefsPanel *mUniquePage{};
    PrefsPanel::Factories &mFactories;
    const TranslatableString mTitlePrefix;
-
-   std::unique_ptr< SettingTransaction > mTransaction;
 
    DECLARE_EVENT_TABLE()
 };

@@ -11,10 +11,8 @@
 class AVStreamWrapperImpl : public AVStreamWrapper
 {
 public:
-   AVStreamWrapperImpl(
-      const FFmpegFunctions& ffmpeg, AVStream* wrapped, bool forEncoding)
-       : AVStreamWrapper(ffmpeg, wrapped)
-       , mForEncoding(forEncoding)
+   AVStreamWrapperImpl(const FFmpegFunctions& ffmpeg, AVStream* wrapped)
+      : AVStreamWrapper(ffmpeg, wrapped)
    {
    }
 
@@ -175,11 +173,7 @@ public:
    bool IsAudio() const noexcept override
    {
       if (mAVStream != nullptr)
-#if LIBAVFORMAT_VERSION_MAJOR <= 58
          return mAVStream->codec->codec_type == AVMEDIA_TYPE_AUDIO;
-#else
-         return mAVStream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO;
-#endif
 
       return {};
    }
@@ -187,66 +181,21 @@ public:
    AVCodecIDFwd GetAVCodecID() const noexcept override
    {
       if (mAVStream != nullptr)
-#if LIBAVFORMAT_VERSION_MAJOR <= 58
          return mAVStream->codec->codec_id;
-#else
-         return mAVStream->codecpar->codec_id;
-#endif
 
       return AV_CODEC_ID_NONE;
    }
 
-   std::unique_ptr<AVCodecContextWrapper>
-   GetAVCodecContext() const noexcept override
+   std::unique_ptr<AVCodecContextWrapper> GetAVCodecContext() const noexcept override
    {
       if (mAVStream == nullptr)
          return {};
-      
-#if LIBAVFORMAT_VERSION_MAJOR <= 58
+
       return mFFmpeg.CreateAVCodecContextWrapper(mAVStream->codec);
-#else
-      // No memory management is involved here!
-      auto avcodec = mForEncoding ?
-                        mFFmpeg.avcodec_find_encoder(mAVStream->codecpar->codec_id) :
-                        mFFmpeg.avcodec_find_decoder(mAVStream->codecpar->codec_id);
-
-      AVCodecContext* codecContext = mFFmpeg.avcodec_alloc_context3(avcodec);
-
-      if (codecContext == nullptr)
-         return {};
-
-      auto context = mFFmpeg.CreateAVCodecContextWrapper(codecContext);
-
-      if (!mForEncoding)
-      {
-         auto ret = mFFmpeg.avcodec_parameters_to_context(
-            codecContext, mAVStream->codecpar);
-
-         if (ret < 0)
-            return {};
-      }
-      
-      return context;
-#endif
    }
-
-   int SetParametersFromContext(AVCodecContextWrapper& context) noexcept
-   {
-#if LIBAVFORMAT_VERSION_MAJOR <= 58
-      return 0;
-#else
-      return mFFmpeg.avcodec_parameters_from_context(
-         mAVStream->codecpar, context.GetWrappedValue());
-#endif
-   }
-
-private:
-   const bool mForEncoding;
 };
 
-std::unique_ptr<AVStreamWrapper>
-CreateAVStreamWrapper(const FFmpegFunctions& ffmpeg, AVStream* wrapped, bool forEncoding)
+std::unique_ptr<AVStreamWrapper> CreateAVStreamWrapper(const FFmpegFunctions& ffmpeg, AVStream* wrapped)
 {
-   return std::make_unique<AVStreamWrapperImpl>(
-      ffmpeg, wrapped, forEncoding);
+   return std::make_unique<AVStreamWrapperImpl>(ffmpeg, wrapped);
 }

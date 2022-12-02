@@ -37,7 +37,6 @@ public:
 
    virtual int64_t GetPresentationTimestamp() const noexcept = 0;
    virtual int64_t GetDecompressionTimestamp() const noexcept = 0;
-
    virtual int GetDuration() const noexcept = 0;
 
    virtual void RescalePresentationTimestamp(AudacityAVRational bq, AudacityAVRational cq) noexcept = 0;

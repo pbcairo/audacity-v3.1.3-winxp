@@ -23,7 +23,6 @@
 #include <wx/intl.h>
 
 #include "../LabelTrack.h"
-#include "../SyncLock.h"
 #include "../WaveClip.h"
 #include "../WaveTrack.h"
 
@@ -46,31 +45,31 @@ EffectReverse::~EffectReverse()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectReverse::GetSymbol() const
+ComponentInterfaceSymbol EffectReverse::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectReverse::GetDescription() const
+TranslatableString EffectReverse::GetDescription()
 {
    return XO("Reverses the selected audio");
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectReverse::GetType() const
+EffectType EffectReverse::GetType()
 {
    return EffectTypeProcess;
 }
 
-bool EffectReverse::IsInteractive() const
+bool EffectReverse::IsInteractive()
 {
    return false;
 }
 
 // Effect implementation
 
-bool EffectReverse::Process(EffectInstance &, EffectSettings &)
+bool EffectReverse::Process()
 {
    //all needed because Reverse should move the labels too
    this->CopyInputTracks(true); // Set up mOutputTracks.
@@ -78,7 +77,7 @@ bool EffectReverse::Process(EffectInstance &, EffectSettings &)
    int count = 0;
 
    auto trackRange =
-      mOutputTracks->Any() + &SyncLock::IsSelectedOrSyncLockSelected;
+      mOutputTracks->Any() + &Track::IsSelectedOrSyncLockSelected;
    trackRange.VisitWhile( bGoodResult,
       [&](WaveTrack * track) {
          if (mT1 > mT0) {

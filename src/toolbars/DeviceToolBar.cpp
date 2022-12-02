@@ -18,8 +18,6 @@
 #include "DeviceToolBar.h"
 #include "ToolManager.h"
 
-#include <thread>
-
 // For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
 
@@ -67,7 +65,7 @@ BEGIN_EVENT_TABLE(DeviceToolBar, ToolBar)
    EVT_COMMAND(wxID_ANY, EVT_CAPTURE_KEY, DeviceToolBar::OnCaptureKey)
 END_EVENT_TABLE()
 
-int DeviceToolbarPrefsID()
+static int DeviceToolbarPrefsID()
 {
    static int value = wxNewId();
    return value;
@@ -77,8 +75,8 @@ int DeviceToolbarPrefsID()
 DeviceToolBar::DeviceToolBar( AudacityProject &project )
 : ToolBar( project, DeviceBarID, XO("Device"), wxT("Device"), true )
 {
-   mSubscription = DeviceManager::Instance()->Subscribe(
-      *this, &DeviceToolBar::OnRescannedDevices );
+   DeviceManager::Instance()->Bind( EVT_RESCANNED_DEVICES,
+      &DeviceToolBar::OnRescannedDevices, this );
 }
 
 DeviceToolBar::~DeviceToolBar()
@@ -286,7 +284,7 @@ void DeviceToolBar::UpdatePrefs()
    }
 
    devName = AudioIOPlaybackDevice.Read();
-   sourceName = AudioIOPlaybackSource.Read();
+   sourceName = gPrefs->Read(wxT("/AudioIO/PlaybackSource"), wxT(""));
    if (sourceName.empty())
       desc = devName;
    else
@@ -555,11 +553,11 @@ void DeviceToolBar::FillInputChannels()
    mInputChannels->SetMinSize(wxSize(50, wxDefaultCoord));
 }
 
-void DeviceToolBar::OnRescannedDevices(DeviceChangeMessage m)
+void DeviceToolBar::OnRescannedDevices( wxEvent &event )
 {
+   event.Skip();
    // Hosts may have disappeared or appeared so a complete repopulate is needed.
-   if (m == DeviceChangeMessage::Rescan)
-      RefillCombos();
+   RefillCombos();
 }
 
 //return 1 if host changed, 0 otherwise.
@@ -602,9 +600,9 @@ void DeviceToolBar::SetDevices(const DeviceSourceMap *in, const DeviceSourceMap 
    if (out) {
       AudioIOPlaybackDevice.Write(out->deviceString);
       if (out->totalSources >= 1) {
-         AudioIOPlaybackSource.Write(out->sourceString);
+         gPrefs->Write(wxT("/AudioIO/PlaybackSource"), out->sourceString);
       } else {
-         AudioIOPlaybackSource.Reset();
+         gPrefs->Write(wxT("/AudioIO/PlaybackSource"), wxT(""));
       }
       gPrefs->Flush();
    }
@@ -677,10 +675,8 @@ void DeviceToolBar::OnChoice(wxCommandEvent &event)
       if (gAudioIO->IsMonitoring())
       {
          gAudioIO->StopStream();
-         while (gAudioIO->IsBusy()) {
-            using namespace std::chrono;
-            std::this_thread::sleep_for(100ms);
-         }
+         while (gAudioIO->IsBusy())
+            wxMilliSleep(100);
       }
       gAudioIO->HandleDeviceChange();
    }

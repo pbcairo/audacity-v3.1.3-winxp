@@ -54,8 +54,7 @@ TimeToolBar::TimeToolBar(AudacityProject &project)
    mListener(NULL),
    mAudioTime(NULL)
 {
-   mSubscription =
-      ProjectRate::Get(project).Subscribe(*this, &TimeToolBar::OnRateChanged);
+   project.Bind(EVT_PROJECT_RATE_CHANGE, &TimeToolBar::OnRateChanged, this);
 }
 
 TimeToolBar::~TimeToolBar()
@@ -264,10 +263,13 @@ void TimeToolBar::SetResizingLimits()
 }
 
 // Called when the project rate changes
-void TimeToolBar::OnRateChanged(double rate)
+void TimeToolBar::OnRateChanged(wxEvent &evt)
 {
-   if (mAudioTime)
-      mAudioTime->SetSampleRate(rate);
+   evt.Skip();
+
+   if (mAudioTime) {
+      mAudioTime->SetSampleRate(ProjectRate::Get(mProject).GetRate());
+   }
 }
 
 // Called when the format drop downs is changed.

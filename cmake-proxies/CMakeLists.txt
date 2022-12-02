@@ -22,15 +22,6 @@ if(${_OPT}has_crashreports)
    add_conan_lib(breakpad breakpad/0.1 REQUIRED)
 endif()
 
-if(${_OPT}has_vst3)
-    add_conan_lib(
-        vst3sdk vst3sdk/3.7.3
-        REQUIRED
-        HAS_ONLY_DEBUG_RELEASE
-        ALLOW_FIND_PACKAGE
-    )
-endif()
-
 set( wx_zlib "zlib" )
 
 set( wx_png "libpng" )
@@ -43,8 +34,10 @@ if ( ${_OPT}use_zlib STREQUAL "system" )
    set( wx_zlib "sys" )
    # To prevent linking conflicts - we need to use system libpng as well.
    # wxWdigets will attempt to resolve it using find_package
+   find_required_package( PNG "libpng-dev" )
    set( wx_png "sys" )
    # And, for consistency
+   find_required_package( JPEG "libjpeg-turbo8-dev" )
    set( wx_jpeg "sys" )
 
    set( id3tag_zlib "system" )
@@ -58,7 +51,7 @@ endif()
 
 add_conan_lib(
    wxWidgets
-   wxwidgets/3.1.3.3-audacity
+   wxwidgets/3.1.3.1-audacity
    REQUIRED
    ALWAYS_ALLOW_CONAN_FALLBACK
    OPTION_NAME wxwidgets
@@ -88,19 +81,6 @@ add_conan_lib(
       libjpeg-turbo:SIMD=False
 )
 
-# If we are building using Conan provided version of
-# wxWidgets, but against system libraries - ensure that required
-# Librries are installed.
-if(${_OPT}use_wxwidgets STREQUAL "local")
-   if (wx_png STREQUAL "sys")
-      find_required_package( PNG "libpng-dev" )
-   endif()
-
-   if (wx_jpeg STREQUAL "sys")
-      find_required_package( JPEG "libjpeg-turbo8-dev" )
-   endif()
-endif()
-
 add_conan_lib(
    libmp3lame
    libmp3lame/3.100
@@ -109,31 +89,6 @@ add_conan_lib(
    PKG_CONFIG "lame >= 3.100"
    ALLOW_FIND_PACKAGE
 )
-
-add_conan_lib(
-   mpg123
-   mpg123/1.29.3
-   PKG_CONFIG "libmpg123"
-   OPTION_NAME libmpg123
-   INTERFACE_NAME MPG123::libmpg123
-   CONAN_OPTIONS
-      mpg123:shared=True
-      mpg123:network=False
-)
-
-if( USE_LIBMPG123 )
-   # If we are building against libmpg123, we need to drop
-   # the previos configuration, which may used libmad
-   set( USE_LIBMAD OFF CACHE INTERNAL "" FORCE )
-   set( ${_OPT}use_libmad "off" )
-else()
-   add_conan_lib(
-      libmad
-      libmad/0.15.2b-1@
-      OPTION_NAME libmad
-      PKG_CONFIG "mad >= 0.15.0b" # Ubuntu has broken PC file
-   )
-endif()
 
 add_conan_lib(
    libid3tag
@@ -145,13 +100,10 @@ add_conan_lib(
 )
 
 add_conan_lib(
-   WavPack
-   wavpack/5.4.0
-   OPTION_NAME wavpack
-   ALLOW_FIND_PACKAGE
-   PKG_CONFIG "wavpack >= 5.2.0"
-   CONAN_OPTIONS
-      wavpack:shared=True
+   libmad
+   libmad/0.15.2b@audacity/stable
+   OPTION_NAME libmad
+   PKG_CONFIG "mad >= 0.15.0b" # Ubuntu has broken PC file
 )
 
 add_conan_lib(
@@ -215,14 +167,6 @@ if( ${_OPT}has_asio_support )
    set( portaudio_enable_asio "portaudio:with_asio=True" )
 endif()
 
-if(UNIX AND NOT APPLE)
-   find_package(JACK QUIET)
-
-   if( NOT JACK_FOUND )
-      set( portaudio_disable_jack "portaudio:with_jack=False" )
-   endif()
-endif()
-
 add_conan_lib(
    PortAudio
    portaudio/19.7.0
@@ -234,7 +178,6 @@ add_conan_lib(
       # Audacity doesn't support WDM/KS (yet)
       portaudio:with_wdmks=False
       ${portaudio_enable_asio}
-      ${portaudio_disable_jack}
 )
 
 if( ${_OPT}has_networking )
@@ -279,7 +222,7 @@ if( NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|Windows")
    )
 endif()
 
-if( ${_OPT}has_sentry_reporting OR ${_OPT}has_audiocom_upload )
+if( ${_OPT}has_sentry_reporting )
    add_conan_lib(
       RapidJSON
       rapidjson/1.1.0

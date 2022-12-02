@@ -37,24 +37,7 @@ Mixer::WarpOptions PlaybackPolicy::MixerWarpOptions(PlaybackSchedule &schedule)
 PlaybackPolicy::BufferTimes
 PlaybackPolicy::SuggestedBufferTimes(PlaybackSchedule &)
 {
-   using namespace std::chrono;
-#if 1
-   // Shorter times than in the default policy so that responses, to changes of
-   // loop region or speed slider or other such controls, don't lag too much
-   return { 0.05s, 0.05s, 0.25s };
-#else
-/*
-The old values, going very far back.
-
-There are old comments in the code about larger batches of work filling the
-queue with samples, to reduce CPU usage.  Maybe this doesn't matter with most
-modern machines, or maybe there will prove to be a need to choose the numbers
-more smartly than these hardcoded values.  Maybe we will need to figure out
-adaptiveness of the buffer size by detecting how long the work takes.  Maybe
-we can afford even smaller times.
-*/
-   return { 4.0s, 4.0s, 10.0s };
-#endif
+   return { 4.0, 4.0, 10.0 };
 }
 
 bool PlaybackPolicy::AllowSeek(PlaybackSchedule &)
@@ -104,8 +87,8 @@ PlaybackPolicy::GetPlaybackSlice(PlaybackSchedule &schedule, size_t available)
       const double extraRealTime = (TimeQueueGrainSize + 1) / mRate;
       auto extra = std::min( extraRealTime, deltat - realTimeRemaining );
       auto realTime = realTimeRemaining + extra;
-      frames = realTime * mRate + 0.5;
-      toProduce = realTimeRemaining * mRate + 0.5;
+      frames = realTime * mRate;
+      toProduce = realTimeRemaining * mRate;
       schedule.RealTimeAdvance( realTime );
    }
    else
@@ -186,8 +169,8 @@ void NewDefaultPlaybackPolicy::Initialize(
    mMessageChannel.Write( { mLastPlaySpeed,
       schedule.mT0, mLoopEndTime, mLoopEnabled } );
 
-   mSubscription = ViewInfo::Get( mProject ).playRegion.Subscribe(
-      *this, &NewDefaultPlaybackPolicy::OnPlayRegionChange);
+   ViewInfo::Get( mProject ).playRegion.Bind( EVT_PLAY_REGION_CHANGE,
+      &NewDefaultPlaybackPolicy::OnPlayRegionChange, this);
    if (mVariableSpeed)
       mProject.Bind( EVT_PLAY_SPEED_CHANGE,
          &NewDefaultPlaybackPolicy::OnPlaySpeedChange, this);
@@ -208,8 +191,7 @@ NewDefaultPlaybackPolicy::SuggestedBufferTimes(PlaybackSchedule &)
 {
    // Shorter times than in the default policy so that responses to changes of
    // loop region or speed slider don't lag too much
-   using namespace std::chrono;
-   return { 0.05s, 0.05s, 0.25s };
+   return { 0.05, 0.05, 0.25 };
 }
 
 bool NewDefaultPlaybackPolicy::RevertToOldDefault(const PlaybackSchedule &schedule) const
@@ -244,7 +226,7 @@ NewDefaultPlaybackPolicy::GetPlaybackSlice(
    double deltat = (frames / mRate) * mLastPlaySpeed;
 
    if (deltat > realTimeRemaining) {
-      toProduce = frames = 0.5 + (realTimeRemaining * mRate) / mLastPlaySpeed;
+      toProduce = frames = (realTimeRemaining * mRate) / mLastPlaySpeed;
       auto realTime = realTimeRemaining;
       double extra = 0;
       if (RevertToOldDefault(schedule)) {
@@ -252,7 +234,7 @@ NewDefaultPlaybackPolicy::GetPlaybackSlice(
          // satisfy its end condition
          const double extraRealTime =
             ((TimeQueueGrainSize + 1) / mRate) * mLastPlaySpeed;
-         extra = std::min( extraRealTime, deltat - realTimeRemaining );
+         auto extra = std::min( extraRealTime, deltat - realTimeRemaining );
          frames = ((realTimeRemaining + extra) * mRate) / mLastPlaySpeed;
       }
       schedule.RealTimeAdvance( realTimeRemaining + extra );
@@ -399,12 +381,13 @@ bool NewDefaultPlaybackPolicy::RepositionPlayback(
 
 bool NewDefaultPlaybackPolicy::Looping( const PlaybackSchedule & ) const
 {
-   return mLoopEnabled;
+   return true;
 }
 
-void NewDefaultPlaybackPolicy::OnPlayRegionChange(Observer::Message)
+void NewDefaultPlaybackPolicy::OnPlayRegionChange( PlayRegionEvent &evt)
 {
    // This executes in the main thread
+   evt.Skip(); // Let other listeners hear the event too
    WriteMessage();
 }
 
@@ -542,7 +525,7 @@ void PlaybackSchedule::TimeQueue::Resize(size_t size)
 }
 
 void PlaybackSchedule::TimeQueue::Producer(
-   PlaybackSchedule &schedule, PlaybackSlice slice )
+   PlaybackSchedule &schedule, size_t nSamples )
 {
    auto &policy = schedule.GetPolicy();
 
@@ -558,41 +541,28 @@ void PlaybackSchedule::TimeQueue::Producer(
    auto space = TimeQueueGrainSize - remainder;
    const auto size = mData.size();
 
-   // Produce advancing times
-   auto frames = slice.toProduce;
-   while ( frames >= space ) {
+   while ( nSamples >= space ) {
       auto times = policy.AdvancedTrackTime( schedule, time, space );
       time = times.second;
       if (!std::isfinite(time))
          time = times.first;
       index = (index + 1) % size;
       mData[ index ].timeValue = time;
-      frames -= space;
+      nSamples -= space;
       remainder = 0;
       space = TimeQueueGrainSize;
    }
+
    // Last odd lot
-   if ( frames > 0 ) {
-      auto times = policy.AdvancedTrackTime( schedule, time, frames );
+   if ( nSamples > 0 ) {
+      auto times = policy.AdvancedTrackTime( schedule, time, nSamples );
       time = times.second;
       if (!std::isfinite(time))
          time = times.first;
-      remainder += frames;
-      space -= frames;
-   }
-
-   // Produce constant times if there is also some silence in the slice
-   frames = slice.frames - slice.toProduce;
-   while ( frames > 0 && frames >= space ) {
-      index = (index + 1) % size;
-      mData[ index ].timeValue = time;
-      frames -= space;
-      remainder = 0;
-      space = TimeQueueGrainSize;
    }
 
    mLastTime = time;
-   mTail.mRemainder = remainder + frames;
+   mTail.mRemainder = remainder + nSamples;
    mTail.mIndex = index;
 }
 

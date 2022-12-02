@@ -24,6 +24,23 @@ Paul Licameli split from TrackPanel.cpp
 #include "ViewInfo.h"
 #include "../../widgets/wxWidgetsWindowPlacement.h"
 
+namespace {
+   CommonTrackPanelCell::Hook &GetHook()
+   {
+      static CommonTrackPanelCell::Hook theHook;
+      return theHook;
+   }
+}
+
+auto CommonTrackPanelCell::InstallMouseWheelHook( const Hook &hook )
+   -> Hook
+{
+   auto &theHook = GetHook();
+   auto result = theHook;
+   theHook = hook;
+   return result;
+}
+
 CommonTrackPanelCell::~CommonTrackPanelCell()
 {
 }
@@ -108,7 +125,7 @@ unsigned CommonTrackPanelCell::DoContextMenu( const wxRect &rect,
 unsigned CommonTrackPanelCell::HandleWheelRotation
 (const TrackPanelMouseEvent &evt, AudacityProject *pProject)
 {
-   auto &hook = MouseWheelHook::Get();
+   auto hook = GetHook();
    return hook ? hook( evt, pProject ) : RefreshCode::Cancelled;
 }
 
@@ -118,6 +135,10 @@ CommonTrackCell::CommonTrackCell( const std::shared_ptr< Track > &parent )
 
 CommonTrackCell::~CommonTrackCell() = default;
 
+void CommonTrackCell::CopyTo( Track& ) const
+{
+}
+
 void CommonTrackCell::Reparent( const std::shared_ptr<Track> &parent )
 {
    mwTrack = parent;
@@ -126,4 +147,14 @@ void CommonTrackCell::Reparent( const std::shared_ptr<Track> &parent )
 std::shared_ptr<Track> CommonTrackCell::DoFindTrack()
 {
    return mwTrack.lock();
+}
+
+void CommonTrackCell::WriteXMLAttributes( XMLWriter & ) const
+{
+}
+
+bool CommonTrackCell::HandleXMLAttribute(
+   const std::string_view& attr, const XMLAttributeValueView& valueView)
+{
+   return false;
 }

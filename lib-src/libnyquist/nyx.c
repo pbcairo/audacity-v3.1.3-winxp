@@ -905,8 +905,6 @@ nyx_rval nyx_eval_expression(const char *expr_string)
 
  finish:
 
-   xlend(&nyx_cntxt);
-
    xlflush();
 
    xlpop(); // unprotect expr
@@ -1114,8 +1112,6 @@ int nyx_get_audio(nyx_audio_callback callback, void *userdata)
    // Never reached
 
  finish:
-
-   xlend(&nyx_cntxt);
 
    if (buffer) {
       free(buffer);

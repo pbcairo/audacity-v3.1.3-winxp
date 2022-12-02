@@ -40,12 +40,12 @@ ApplicationPrefs::~ApplicationPrefs()
 {
 }
 
-ComponentInterfaceSymbol ApplicationPrefs::GetSymbol() const
+ComponentInterfaceSymbol ApplicationPrefs::GetSymbol()
 {
    return s_ComponentInterfaceSymbol;
 }
 
-TranslatableString ApplicationPrefs::GetDescription() const
+TranslatableString ApplicationPrefs::GetDescription()
 {
    return XO("Preferences for Application");
 }

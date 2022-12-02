@@ -9,7 +9,7 @@ Paul Licameli split from TrackPanel.cpp
 **********************************************************************/
 
 #include "TrackView.h"
-#include "Track.h"
+#include "../../Track.h"
 
 #include "ClientData.h"
 #include "Project.h"
@@ -60,34 +60,18 @@ void TrackView::CopyTo( Track &track ) const
    other.mHeight = mHeight;
 }
 
-static const AttachedTrackObjects::RegisteredFactory key{
-   []( Track &track ){
-      return DoGetView::Call( track );
-   }
-};
-
 TrackView &TrackView::Get( Track &track )
 {
-   return track.AttachedObjects::Get< TrackView >( key );
+   auto pView = std::static_pointer_cast<TrackView>( track.GetTrackView() );
+   if (!pView)
+      // create on demand
+      track.SetTrackView( pView = DoGetView::Call( track ) );
+   return *pView;
 }
 
 const TrackView &TrackView::Get( const Track &track )
 {
-   return Get( const_cast< Track & >( track ) );
-}
-
-TrackView *TrackView::Find( Track *pTrack )
-{
-   if (!pTrack)
-      return nullptr;
-   auto &track = *pTrack;
-   // do not create on demand if it is null
-   return track.AttachedObjects::Find< TrackView >( key );
-}
-
-const TrackView *TrackView::Find( const Track *pTrack )
-{
-   return Find( const_cast< Track* >( pTrack ) );
+   return Get( const_cast< Track& >( track ) );
 }
 
 void TrackView::SetMinimized(bool isMinimized)
@@ -191,30 +175,29 @@ namespace {
  Attached to each project, it receives track list events and maintains the
  cache of cumulative track view heights for use by TrackPanel.
  */
-struct TrackPositioner final : ClientData::Base
+struct TrackPositioner final : ClientData::Base, wxEvtHandler
 {
    AudacityProject &mProject;
 
    explicit TrackPositioner( AudacityProject &project )
       : mProject{ project }
    {
-      mSubscription = TrackList::Get( project )
-         .Subscribe(*this, &TrackPositioner::OnUpdate);
+      TrackList::Get( project ).Bind(
+         EVT_TRACKLIST_ADDITION, &TrackPositioner::OnUpdate, this );
+      TrackList::Get( project ).Bind(
+         EVT_TRACKLIST_DELETION, &TrackPositioner::OnUpdate, this );
+      TrackList::Get( project ).Bind(
+         EVT_TRACKLIST_PERMUTED, &TrackPositioner::OnUpdate, this );
+      TrackList::Get( project ).Bind(
+         EVT_TRACKLIST_RESIZING, &TrackPositioner::OnUpdate, this );
    }
    TrackPositioner( const TrackPositioner & ) PROHIBITED;
    TrackPositioner &operator=( const TrackPositioner & ) PROHIBITED;
 
-   void OnUpdate(const TrackListEvent & e)
+   void OnUpdate( TrackListEvent & e )
    {
-      switch (e.mType) {
-      case TrackListEvent::ADDITION:
-      case TrackListEvent::DELETION:
-      case TrackListEvent::PERMUTED:
-      case TrackListEvent::RESIZING:
-         break;
-      default:
-         return;
-      }
+      e.Skip();
+
       auto iter =
          TrackList::Get( mProject ).Find( e.mpTrack.lock().get() );
       if ( !*iter )
@@ -230,8 +213,6 @@ struct TrackPositioner final : ClientData::Base
          ++iter;
       }
    }
-
-   Observer::Subscription mSubscription;
 };
 
 static const AudacityProject::AttachedObjects::RegisteredFactory key{

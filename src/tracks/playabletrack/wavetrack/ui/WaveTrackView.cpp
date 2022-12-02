@@ -27,9 +27,8 @@ Paul Licameli split from TrackPanel.cpp
 
 #include "../../../../commands/CommandContext.h"
 #include "../../../../HitTestResult.h"
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
-#include "../../../../SyncLock.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanel.h"
 #include "../../../../TrackPanelAx.h"
@@ -48,6 +47,8 @@ Paul Licameli split from TrackPanel.cpp
 #include "WaveTrackAffordanceControls.h"
 #include "WaveTrackAffordanceHandle.h"
 #include "WaveClipTrimHandle.h"
+
+namespace {
 
 constexpr int kClipDetailedViewMinimumWidth{ 3 };
 
@@ -690,6 +691,7 @@ private:
    size_t mMySubView{};
 };
 
+}
 
 std::pair<
    bool, // if true, hit-testing is finished
@@ -862,16 +864,6 @@ const WaveTrackView &WaveTrackView::Get( const WaveTrack &track )
    return Get( const_cast<WaveTrack&>( track ) );
 }
 
-WaveTrackView *WaveTrackView::Find( WaveTrack *pTrack )
-{
-   return static_cast< WaveTrackView* >( TrackView::Find( pTrack ) );
-}
-
-const WaveTrackView *WaveTrackView::Find( const WaveTrack *pTrack )
-{
-   return Find( const_cast<WaveTrack*>( pTrack ) );
-}
-
 WaveTrackView::WaveTrackView( const std::shared_ptr<Track> &pTrack )
    : CommonTrackView{ pTrack }
 {
@@ -945,10 +937,10 @@ WaveTrackView::DoDetailedHitTest
       if (!WaveTrackView::ClipDetailsVisible(*clip, viewInfo, st.rect)
          && HitTest(*clip, viewInfo, st.rect, st.state.GetPosition()))
       {
-         auto &waveTrackView = WaveTrackView::Get(*pTrack);
+         auto waveTrackView = std::static_pointer_cast<WaveTrackView>(pTrack->GetTrackView());
          results.push_back(
             AssignUIHandlePtr(
-               waveTrackView.mAffordanceHandle,
+               waveTrackView->mAffordanceHandle,
                std::make_shared<WaveTrackAffordanceHandle>(pTrack, clip)
             )
          );
@@ -1465,6 +1457,53 @@ std::shared_ptr<TrackVRulerControls> WaveTrackView::DoGetVRulerControls()
    return {};
 }
 
+#undef PROFILE_WAVEFORM
+#ifdef PROFILE_WAVEFORM
+#ifdef __WXMSW__
+#include <time.h>
+#else
+#include <sys/time.h>
+#endif
+double gWaveformTimeTotal = 0;
+int gWaveformTimeCount = 0;
+
+namespace {
+   struct Profiler {
+      Profiler()
+      {
+#   ifdef __WXMSW__
+         _time64(&tv0);
+#   else
+         gettimeofday(&tv0, NULL);
+#   endif
+      }
+      
+      ~Profiler()
+      {
+#   ifdef __WXMSW__
+         _time64(&tv1);
+         double elapsed = _difftime64(tv1, tv0);
+#   else
+         gettimeofday(&tv1, NULL);
+         double elapsed =
+         (tv1.tv_sec + tv1.tv_usec*0.000001) -
+         (tv0.tv_sec + tv0.tv_usec*0.000001);
+#   endif
+         gWaveformTimeTotal += elapsed;
+         gWaveformTimeCount++;
+         wxPrintf(wxT("Avg waveform drawing time: %f\n"),
+                  gWaveformTimeTotal / gWaveformTimeCount);
+      }
+      
+#   ifdef __WXMSW__
+      __time64_t tv0, tv1;
+#else
+      struct timeval tv0, tv1;
+#endif
+   };
+}
+#endif
+
 namespace
 {
    // Returns an offset in seconds to be applied to the right clip 
@@ -1496,7 +1535,7 @@ namespace
 }
 
 ClipParameters::ClipParameters
-   (bool spectrum, const SampleTrack *track, const WaveClip *clip, const wxRect &rect,
+   (bool spectrum, const WaveTrack *track, const WaveClip *clip, const wxRect &rect,
    const SelectedRegion &selectedRegion, const ZoomInfo &zoomInfo)
 {
    tOffset = clip->GetPlayStartTime();
@@ -1514,8 +1553,7 @@ ClipParameters::ClipParameters
 
    //If the track isn't selected, make the selection empty
    if (!track->GetSelected() &&
-      (spectrum ||
-       !SyncLock::IsSyncLockSelected(track))) { // PRL: why was there a difference for spectrum?
+      (spectrum || !track->IsSyncLockSelected())) { // PRL: why was there a difference for spectrum?
       sel0 = sel1 = 0.0;
    }
 
@@ -1714,10 +1752,4 @@ void WaveTrackView::Draw(
    wxASSERT( false );
 
    CommonTrackView::Draw( context, rect, iPass );
-}
-
-using GetWaveTrackSyncLockPolicy =
-   GetSyncLockPolicy::Override< const WaveTrack >;
-DEFINE_ATTACHED_VIRTUAL_OVERRIDE(GetWaveTrackSyncLockPolicy) {
-   return [](auto &) { return SyncLockPolicy::Grouped; };
 }

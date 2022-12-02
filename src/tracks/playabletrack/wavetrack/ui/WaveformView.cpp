@@ -11,7 +11,6 @@ Paul Licameli split from WaveTrackView.cpp
 
 #include "WaveformView.h"
 
-#include "WaveformCache.h"
 #include "WaveformVRulerControls.h"
 #include "WaveTrackView.h"
 #include "WaveTrackViewConstants.h"
@@ -20,12 +19,10 @@ Paul Licameli split from WaveTrackView.cpp
 #include "../../../ui/EnvelopeHandle.h"
 #include "../../../ui/TimeShiftHandle.h"
 #include "AColor.h"
-#include "Envelope.h"
+#include "../../../../Envelope.h"
 #include "../../../../EnvelopeEditor.h"
 #include "../../../../ProjectSettings.h"
 #include "SelectedRegion.h"
-#include "../../../../SyncLock.h"
-#include "../../../../TrackArt.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelDrawingContext.h"
 #include "../../../../TrackPanelMouseEvent.h"
@@ -33,8 +30,6 @@ Paul Licameli split from WaveTrackView.cpp
 #include "../../../../WaveClip.h"
 #include "../../../../WaveTrack.h"
 #include "../../../../prefs/WaveformSettings.h"
-
-#include "FrameStatistics.h"
 
 #include <wx/graphics.h>
 #include <wx/dc.h>
@@ -354,9 +349,6 @@ void DrawMinMaxRMS(
 
    long pixAnimOffset = (long)fabs((double)(wxDateTime::Now().GetTicks() * -10)) +
       wxDateTime::Now().GetMillisecond() / 100; //10 pixels a second
-
-   const auto ms = wxDateTime::Now().GetMillisecond();
-   const auto ticks = (long)fabs((double)(wxDateTime::Now().GetTicks() * -10));
 
    bool drawStripes = true;
    bool drawWaveform = true;
@@ -686,7 +678,9 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
    const auto &selectedRegion = *artist->pSelectedRegion;
    const auto &zoomInfo = *artist->pZoomInfo;
 
-   auto sw = FrameStatistics::CreateStopwatch(FrameStatistics::SectionID::WaveformView);
+#ifdef PROFILE_WAVEFORM
+   Profiler profiler;
+#endif
 
    bool highlightEnvelope = false;
 #ifdef EXPERIMENTAL_TRACK_PANEL_HIGHLIGHTING
@@ -736,7 +730,7 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
 
    std::vector<double> vEnv(mid.width);
    double *const env = &vEnv[0];
-   CommonTrackView::GetEnvelopeValues( *clip->GetEnvelope(),
+   Envelope::GetValues( *clip->GetEnvelope(),
        tOffset,
 
         // PRL: change back to make envelope evaluate only at sample times
@@ -750,7 +744,7 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
    // part of the waveform
    {
       double tt0, tt1;
-      if (SyncLock::IsSelectedOrSyncLockSelected(track)) {
+      if (track->GetSelected() || track->IsSyncLockSelected()) {
          tt0 = track->LongSamplesToTime(track->TimeToLongSamples(selectedRegion.t0())),
             tt1 = track->LongSamplesToTime(track->TimeToLongSamples(selectedRegion.t1()));
       }
@@ -781,8 +775,6 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
    // Require at least 3 pixels per sample for drawing the draggable points.
    const double threshold2 = 3 * rate;
 
-   auto &clipCache = WaveClipWaveformCache::Get(*clip);
-
    {
       bool showIndividualSamples = false;
       for (unsigned ii = 0; !showIndividualSamples && ii < nPortions; ++ii) {
@@ -802,8 +794,7 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
          // fisheye moves over the background, there is then less to do when
          // redrawing.
 
-         if (!clipCache.GetWaveDisplay( *clip, display,
-            t0, pps))
+         if (!clip->GetWaveDisplay(display,t0, pps))
             return;
       }
    }
@@ -853,7 +844,7 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
             fisheyeDisplay.width -= skipped;
             // Get a wave display for the fisheye, uncached.
             if (rectPortion.width > 0)
-               if (!clipCache.GetWaveDisplay( *clip,
+               if (!clip->GetWaveDisplay(
                      fisheyeDisplay, t0, -1.0)) // ignored
                   continue; // serious error.  just don't draw??
             useMin = fisheyeDisplay.min;
@@ -876,7 +867,7 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
          if (!showIndividualSamples) {
             std::vector<double> vEnv2(rectPortion.width);
             double *const env2 = &vEnv2[0];
-            CommonTrackView::GetEnvelopeValues( *clip->GetEnvelope(),
+            Envelope::GetValues( *clip->GetEnvelope(),
                 tOffset,
 
                  // PRL: change back to make envelope evaluate only at sample times
@@ -884,7 +875,6 @@ void DrawClipWaveform(TrackPanelDrawingContext &context,
                  0, // 1.0 / rate,
 
                  env2, rectPortion.width, leftOffset, zoomInfo );
-
             DrawMinMaxRMS( context, rectPortion, env2,
                zoomMin, zoomMax,
                dB, dBRange,
@@ -1080,7 +1070,7 @@ static const WaveTrackSubViews::RegisteredFactory key{
 #include "WaveTrackControls.h"
 #include "../../../../widgets/PopupMenuTable.h"
 #include "../../../../ProjectAudioIO.h"
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
 
 //=============================================================================

@@ -47,7 +47,7 @@
 #include "Prefs.h"
 #include "../SelectionState.h"
 #include "../ShuttleGui.h"
-#include "../TagsEditor.h"
+#include "../Tags.h"
 #include "../WaveTrack.h"
 #include "../widgets/HelpSystem.h"
 #include "../widgets/AudacityMessageBox.h"
@@ -219,28 +219,11 @@ int ExportMultipleDialog::ShowModal()
 
    EnableControls();
 
-   // This is a work around for issue #2909, and ensures that
-   // when the dialog opens, the first control is the focus.
-   // The work around is only needed on Windows.
-#if defined(__WXMSW__)
-   mDir->SetFocus();
-#endif
-
    return wxDialogWrapper::ShowModal();
 }
 
 void ExportMultipleDialog::PopulateOrExchange(ShuttleGui& S)
 {
-   ChoiceSetting NumberingSetting{
-      wxT("/Export/TrackNameWithOrWithoutNumbers"),
-      {
-         { wxT("labelTrack"), XXO("Using Label/Track Name") },
-         { wxT("numberBefore"), XXO("Numbering before Label/Track Name") },
-         { wxT("numberAfter"), XXO("Numbering after File name prefix") },
-      },
-      0 // labelTrack
-   };
-
    wxString name = mProject->GetProjectName();
    wxString defaultFormat = gPrefs->Read(wxT("/Export/Format"), wxT("WAV"));
 
@@ -271,14 +254,6 @@ void ExportMultipleDialog::PopulateOrExchange(ShuttleGui& S)
       }
    }
 
-   ChoiceSetting FormatSetting{ wxT("/Export/MultipleFormat"),
-      {
-         ByColumns,
-         visibleFormats,
-         formats
-      },
-      mFilterIndex
-   };
 
    // Bug 1304: Set the default file path.  It's used if none stored in config.
    auto DefaultPath = FileNames::FindDefaultPath(FileNames::Operation::Export);
@@ -307,7 +282,15 @@ void ExportMultipleDialog::PopulateOrExchange(ShuttleGui& S)
 
             mFormat = S.Id(FormatID)
                .TieChoice( XXO("Format:"),
-               FormatSetting
+               {
+                  wxT("/Export/MultipleFormat"),
+                  {
+                     ByColumns,
+                     visibleFormats,
+                     formats
+                  },
+                  mFilterIndex
+               }
             );
             S.AddVariableText( {}, false);
             S.AddVariableText( {}, false);
@@ -403,7 +386,15 @@ void ExportMultipleDialog::PopulateOrExchange(ShuttleGui& S)
          // on the Mac, VoiceOver will announce as radio buttons.
          S.StartPanel();
          {
-            S.StartRadioButtonGroup(NumberingSetting);
+            S.StartRadioButtonGroup({
+               wxT("/Export/TrackNameWithOrWithoutNumbers"),
+               {
+                  { wxT("labelTrack"), XXO("Using Label/Track Name") },
+                  { wxT("numberBefore"), XXO("Numbering before Label/Track Name") },
+                  { wxT("numberAfter"), XXO("Numbering after File name prefix") },
+               },
+               0 // labelTrack
+            });
             {
                mByName = S.Id(ByNameID).TieRadioButton();
 
@@ -859,7 +850,7 @@ ProgressResult ExportMultipleDialog::ExportMultipleByLabel(bool byName,
          bShowTagsDialog = bShowTagsDialog && mPlugins[mPluginIndex]->GetCanMetaData(mSubFormatIndex);
 
          if( bShowTagsDialog ){
-            bool bCancelled = !TagsEditorDialog::ShowEditDialog(setting.filetags,
+            bool bCancelled = !setting.filetags.ShowEditDialog(
                ProjectWindow::Find( mProject ),
                XO("Edit Metadata Tags"), bShowTagsDialog);
             gPrefs->Read(wxT("/AudioFiles/ShowId3Dialog"), &bShowTagsDialog, true);
@@ -880,7 +871,7 @@ ProgressResult ExportMultipleDialog::ExportMultipleByLabel(bool byName,
    ExportKit activeSetting;  // pointer to the settings in use for this export
    /* Go round again and do the exporting (so this run is slow but
     * non-interactive) */
-   std::unique_ptr<BasicUI::ProgressDialog> pDialog;
+   std::unique_ptr<ProgressDialog> pDialog;
    for (count = 0; count < numFiles; count++) {
       /* get the settings to use for the export from the array */
       activeSetting = exportSettings[count];
@@ -1003,7 +994,7 @@ ProgressResult ExportMultipleDialog::ExportMultipleByTrack(bool byName,
          bShowTagsDialog = bShowTagsDialog && mPlugins[mPluginIndex]->GetCanMetaData(mSubFormatIndex);
 
          if( bShowTagsDialog ){
-            bool bCancelled = !TagsEditorDialog::ShowEditDialog(setting.filetags,
+            bool bCancelled = !setting.filetags.ShowEditDialog(
                ProjectWindow::Find( mProject ),
                XO("Edit Metadata Tags"), bShowTagsDialog);
             gPrefs->Read(wxT("/AudioFiles/ShowId3Dialog"), &bShowTagsDialog, true);
@@ -1021,7 +1012,7 @@ ProgressResult ExportMultipleDialog::ExportMultipleByTrack(bool byName,
    // loop
    int count = 0; // count the number of successful runs
    ExportKit activeSetting;  // pointer to the settings in use for this export
-   std::unique_ptr<BasicUI::ProgressDialog> pDialog;
+   std::unique_ptr<ProgressDialog> pDialog;
 
    for (auto tr : mTracks->Leaders<WaveTrack>() - 
       (anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)) {
@@ -1066,7 +1057,7 @@ ProgressResult ExportMultipleDialog::ExportMultipleByTrack(bool byName,
    return ok ;
 }
 
-ProgressResult ExportMultipleDialog::DoExport(std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+ProgressResult ExportMultipleDialog::DoExport(std::unique_ptr<ProgressDialog> &pDialog,
                               unsigned channels,
                               const wxFileName &inName,
                               bool selectedOnly,

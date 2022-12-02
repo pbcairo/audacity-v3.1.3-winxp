@@ -13,7 +13,6 @@
 #include <wx/string.h>
 #include <wx/dynlib.h>
 #include <wx/log.h>
-#include <wx/utils.h>
 
 #if defined(__WXMSW__)
 #  include <wx/buffer.h>
@@ -21,7 +20,11 @@
 
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
-#  include <psapi.h>
+#undef PSAPI_VERSION
+#define PSAPI_VERSION 1
+
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
 #else
 #  include <dlfcn.h>
 #endif
@@ -129,8 +132,8 @@ std::vector<wxString> BuildAVFormatPaths(int version)
 #if defined(__WXMSW__)
       wxString::Format("avformat-%d.dll", version),
 #elif defined(__WXMAC__)
-      wxString::Format("libavformat.%d.dylib", version),
       wxString::Format("ffmpeg.%d.64bit.dylib", version),
+      wxString::Format("libavformat.%d.dylib", version),
 #else
       wxString::Format("libavformat.so.%d", version)
 #endif
@@ -208,11 +211,7 @@ struct FFmpegFunctions::Private final
              functions.AVUtilVersion.Major, UtilFactories))
          return false;
 
-      wxLogInfo("FFmpeg libraries loaded successfully from: %s",
-         FileNames::PathFromAddr(AVFormatLibrary->GetSymbol("avformat_version")));
-
-      if (functions.avcodec_register_all)
-         functions.avcodec_register_all();
+      functions.avcodec_register_all();
 
       if (functions.av_register_all)
          functions.av_register_all();
@@ -232,9 +231,6 @@ struct FFmpegFunctions::Private final
       {
          const wxString fullName = wxFileName(path, libraryName).GetFullPath();
 
-         if (!wxFileExists(fullName))
-            continue;
-
          auto library = std::make_shared<wxDynamicLibrary>(fullName);
 
          if (library->IsLoaded())
@@ -246,6 +242,14 @@ struct FFmpegFunctions::Private final
       if (library->IsLoaded())
          return library;
 
+      // Loading has failed.
+      // wxLogSysError doesn't report errors correctly on *NIX
+#if defined(_WIN32)
+      wxLogSysError("Failed to load %s", libraryName.c_str());
+#else
+      const char* errorString = dlerror();
+      wxLogError("Failed to load %s (%s)", libraryName.c_str(), errorString);
+#endif
       return {};
    }
 };
@@ -328,10 +332,6 @@ std::vector<wxString> FFmpegFunctions::GetSearchPaths(bool fromUserPathOnly)
 #elif defined(__WXMAC__)
    paths.emplace_back(wxT("/Library/Application Support/audacity/libs"));
    paths.emplace_back(wxT("/usr/local/lib/audacity"));
-   // x86_64 Homebrew
-   paths.emplace_back(wxT("/usr/local/lib"));
-   // ARM64 Homebrew
-   paths.emplace_back(wxT("/opt/homebrew/lib"));
 #endif
 
    return paths;
@@ -349,9 +349,9 @@ FFmpegFunctions::CreateAVFormatContext() const
 }
 
 std::unique_ptr<AVStreamWrapper>
-FFmpegFunctions::CreateAVStreamWrapper(AVStream* stream, bool forEncoding) const
+FFmpegFunctions::CreateAVStreamWrapper(AVStream* stream) const
 {
-   return mPrivate->FormatFactories.CreateAVStreamWrapper(*this, stream, forEncoding);
+   return mPrivate->FormatFactories.CreateAVStreamWrapper(*this, stream);
 }
 
 std::unique_ptr<AVPacketWrapper> FFmpegFunctions::CreateAVPacketWrapper() const
@@ -382,7 +382,7 @@ std::unique_ptr<AVOutputFormatWrapper> FFmpegFunctions::GuessOutputFormat(
 
 std::unique_ptr<AVOutputFormatWrapper>
 FFmpegFunctions::CreateAVOutputFormatWrapper(
-   const AVOutputFormat* outputFormat) const
+   AVOutputFormat* outputFormat) const
 {
    return mPrivate->FormatFactories.CreateAVOutputFormatWrapper(outputFormat);
 }
@@ -401,7 +401,7 @@ FFmpegFunctions::CreateDecoder(AVCodecIDFwd codecID) const
 std::unique_ptr<AVCodecWrapper>
 FFmpegFunctions::CreateEncoder(AVCodecIDFwd codecID) const
 {
-   auto codec = avcodec_find_encoder(codecID);
+   AVCodec* codec = avcodec_find_encoder(codecID);
 
    if (codec == nullptr)
       return {};
@@ -412,7 +412,7 @@ FFmpegFunctions::CreateEncoder(AVCodecIDFwd codecID) const
 std::unique_ptr<AVCodecWrapper>
 FFmpegFunctions::CreateEncoder(const char* name) const
 {
-   auto codec = avcodec_find_encoder_by_name(name);
+   AVCodec* codec = avcodec_find_encoder_by_name(name);
 
    if (codec == nullptr)
       return {};
@@ -438,92 +438,32 @@ FFmpegFunctions::CreateAVCodecContextWrapperFromCodec(
       *this, std::move(codec));
 }
 
-const std::vector<const AVOutputFormatWrapper*>&
-FFmpegFunctions::GetOutputFormats() const
+std::unique_ptr<AVOutputFormatWrapper>
+FFmpegFunctions::GetNextOutputFormat(const AVOutputFormatWrapper* fmt) const
 {
-   if (mOutputFormats.empty())
-      const_cast<FFmpegFunctions*>(this)->FillOuptutFormatsList();
+   AVOutputFormat* outputFormat =
+      av_oformat_next(fmt != nullptr ? fmt->GetWrappedValue() : nullptr);
 
-   return mOutputFormatPointers;
+   if (outputFormat == nullptr)
+      return {};
+
+   return mPrivate->FormatFactories.CreateAVOutputFormatWrapper(outputFormat);
 }
 
-const std::vector<const AVCodecWrapper*>& FFmpegFunctions::GetCodecs() const
+std::unique_ptr<AVCodecWrapper>
+FFmpegFunctions::GetNextCodec(const AVCodecWrapper* codec) const
 {
-   if (mCodecs.empty())
-      const_cast<FFmpegFunctions*>(this)->FillCodecsList();
+   AVCodec* nextCodec =
+      av_codec_next(codec != nullptr ? codec->GetWrappedValue() : nullptr);
 
-   return mCodecPointers;
+   if (nextCodec == nullptr)
+      return {};
+
+   return mPrivate->CodecFactories.CreateAVCodecWrapper(nextCodec);
 }
 
 std::unique_ptr<AVFifoBufferWrapper>
 FFmpegFunctions::CreateFifoBuffer(int size) const
 {
    return std::make_unique<AVFifoBufferWrapper>(*this, size);
-}
-
-void FFmpegFunctions::FillCodecsList()
-{
-   mCodecs.clear();
-   mCodecPointers.clear();
-
-   if (av_codec_iterate != nullptr)
-   {
-      const AVCodec* currentCodec = nullptr;
-      void* i = 0;
-
-      while ((currentCodec = av_codec_iterate(&i)))
-      {
-         mCodecs.emplace_back(
-            mPrivate->CodecFactories.CreateAVCodecWrapper(currentCodec));
-      }
-   }
-   else if (av_codec_next != nullptr)
-   {
-      AVCodec* currentCodec = nullptr;
-
-      while ((currentCodec = av_codec_next(currentCodec)) != nullptr)
-      {
-         mCodecs.emplace_back(
-            mPrivate->CodecFactories.CreateAVCodecWrapper(currentCodec));
-      }
-   }
-
-   mCodecPointers.reserve(mCodecs.size());
-
-   for (const auto& codec : mCodecs)
-      mCodecPointers.emplace_back(codec.get());
-}
-
-void FFmpegFunctions::FillOuptutFormatsList()
-{
-   mOutputFormats.clear();
-   mOutputFormatPointers.clear();
-
-   if (av_muxer_iterate != nullptr)
-   {
-      const AVOutputFormat* currentFormat = nullptr;
-      void* i = 0;
-
-      while ((currentFormat = av_muxer_iterate(&i)))
-      {
-         mOutputFormats.emplace_back(
-            mPrivate->FormatFactories.CreateAVOutputFormatWrapper(
-               currentFormat));
-      }
-   }
-   else if (av_oformat_next != nullptr)
-   {
-      AVOutputFormat* currentFormat = nullptr;
-
-      while ((currentFormat = av_oformat_next(currentFormat)) != nullptr)
-      {
-         mOutputFormats.emplace_back(
-            mPrivate->FormatFactories.CreateAVOutputFormatWrapper(currentFormat));
-      }
-   }
-
-   mOutputFormatPointers.reserve(mOutputFormats.size());
-
-   for (const auto& format : mOutputFormats)
-      mOutputFormatPointers.emplace_back(format.get());
 }

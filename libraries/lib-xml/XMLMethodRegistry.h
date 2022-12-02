@@ -202,9 +202,13 @@ struct ObjectWriterEntry {
    }
 };
 
-void CallWriters( const Host &host, XMLWriter &writer )
+void CallAttributeWriters( const Host &host, XMLWriter &writer )
 {
    XMLMethodRegistryBase::CallAttributeWriters( &host, writer );
+}
+
+void CallObjectWriters( const Host &host, XMLWriter &writer )
+{
    XMLMethodRegistryBase::CallObjectWriters( &host, writer );
 }
 

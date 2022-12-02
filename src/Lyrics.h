@@ -18,11 +18,10 @@
 #include <wx/textctrl.h> // to inherit
 #include "commands/CommandManagerWindowClasses.h"
 #include "widgets/wxPanelWrapper.h" // to inherit
-#include "Observer.h"
 
 class AudacityProject;
-struct AudioIOEvent;
 class LabelTrack;
+
 
 #define LYRICS_DEFAULT_WIDTH 608
 #define LYRICS_DEFAULT_HEIGHT 280
@@ -101,10 +100,9 @@ class LyricsPanel final
    void SetLyricsStyle(const LyricsStyle newLyricsStyle);
 
    void Update(double t);
-   void UpdateLyrics(struct UndoRedoMessage);
-   void DoUpdateLyrics();
+   void UpdateLyrics(wxEvent &e);
    void OnShow(wxShowEvent& e);
-   void OnStartStop(AudioIOEvent);
+   void OnStartStop(wxCommandEvent &e);
 
    //
    // Event handlers
@@ -140,10 +138,6 @@ private:
    void GetKaraokePosition(double t, int *outX, double *outY);
 
 private:
-   Observer::Subscription mAudioIOSubscription
-      , mUndoSubscription
-   ;
-
    int            mWidth;  // client width
    int            mHeight; // client height
 

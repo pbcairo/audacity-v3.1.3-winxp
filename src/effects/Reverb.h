@@ -2,7 +2,7 @@
 
    Audacity: A Digital Audio Editor
    Audacity(R) is copyright (c) 1999-2013 Audacity Team.
-   License: GPL v2 or later.  See License.txt.
+   License: GPL v2.  See License.txt.
 
    Reverb.h
    Rob Sykes, Vaughan Johnson
@@ -12,112 +12,115 @@
 #ifndef __AUDACITY_EFFECT_REVERB__
 #define __AUDACITY_EFFECT_REVERB__
 
-#include "PerTrackEffect.h"
-#include "../ShuttleAutomation.h"
+#include "Effect.h"
 
+class wxCheckBox;
+class wxSlider;
+class wxSpinCtrl;
+class ShuttleGui;
 
 struct Reverb_priv_t;
 
-struct EffectReverbSettings
-{
-   static constexpr double roomSizeDefault     =  75.0;
-   static constexpr double preDelayDefault     =  10.0;
-   static constexpr double reverberanceDefault =  50.0;
-   static constexpr double hfDampingDefault    =  50.0;
-   static constexpr double toneLowDefault      = 100.0;
-   static constexpr double toneHighDefault     = 100.0;
-   static constexpr double wetGainDefault      =  -1.0;
-   static constexpr double dryGainDefault      =  -1.0;
-   static constexpr double stereoWidthDefault  = 100.0;
-   static constexpr bool   wetOnlyDefault      = false;
-
-   double mRoomSize    { roomSizeDefault };
-   double mPreDelay    { preDelayDefault };
-   double mReverberance{ reverberanceDefault };
-   double mHfDamping   { hfDampingDefault };
-   double mToneLow     { toneLowDefault };
-   double mToneHigh    { toneHighDefault };
-   double mWetGain     { wetGainDefault };
-   double mDryGain     { dryGainDefault };
-   double mStereoWidth { stereoWidthDefault };
-   bool   mWetOnly     { wetOnlyDefault };
-};
-
-
-class EffectReverb final : public EffectWithSettings<EffectReverbSettings, PerTrackEffect>
+class EffectReverb final : public Effect
 {
 public:
-
-   
    static const ComponentInterfaceSymbol Symbol;
 
    EffectReverb();
    virtual ~EffectReverb();
 
+   struct Params
+   {
+      double mRoomSize;
+      double mPreDelay;
+      double mReverberance;
+      double mHfDamping;
+      double mToneLow;
+      double mToneHigh;
+      double mWetGain;
+      double mDryGain;
+      double mStereoWidth;
+      bool mWetOnly;
+   };
+
    // ComponentInterface implementation
 
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
-   ManualPageID ManualPage() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
+   ManualPageID ManualPage() override;
 
    // EffectDefinitionInterface implementation
 
-   EffectType GetType() const override;
-   RegistryPaths GetFactoryPresets() const override;
-   OptionalMessage LoadFactoryPreset(int id, EffectSettings &settings)
-      const override;
+   EffectType GetType() override;
 
-   RealtimeSince RealtimeSupport() const override;
+   // EffectClientInterface implementation
+
+   unsigned GetAudioInCount() override;
+   unsigned GetAudioOutCount() override;
+   bool ProcessInitialize(sampleCount totalLen, ChannelNames chanMap = NULL) override;
+   bool ProcessFinalize() override;
+   size_t ProcessBlock(float **inBlock, float **outBlock, size_t blockLen) override;
+   bool DefineParams( ShuttleParams & S ) override;
+   bool GetAutomationParameters(CommandParameters & parms) override;
+   bool SetAutomationParameters(CommandParameters & parms) override;
+   RegistryPaths GetFactoryPresets() override;
+   bool LoadFactoryPreset(int id) override;
 
    // Effect implementation
 
-   std::unique_ptr<EffectUIValidator> PopulateOrExchange(
-      ShuttleGui & S, EffectInstance &instance,
-      EffectSettingsAccess &access, const EffectOutputs *pOutputs) override;
-
-   struct Validator;
-
-   struct Instance;
-
-   std::shared_ptr<EffectInstance> MakeInstance() const override;
+   bool Startup() override;
+   void PopulateOrExchange(ShuttleGui & S) override;
+   bool TransferDataToWindow() override;
+   bool TransferDataFromWindow() override;
 
 private:
    // EffectReverb implementation
 
+   void SetTitle(const wxString & name = {});
+
+#define SpinSliderHandlers(n) \
+   void On ## n ## Slider(wxCommandEvent & evt); \
+   void On ## n ## Text(wxCommandEvent & evt);
+
+   SpinSliderHandlers(RoomSize)
+   SpinSliderHandlers(PreDelay)
+   SpinSliderHandlers(Reverberance)
+   SpinSliderHandlers(HfDamping)
+   SpinSliderHandlers(ToneLow)
+   SpinSliderHandlers(ToneHigh)
+   SpinSliderHandlers(WetGain)
+   SpinSliderHandlers(DryGain)
+   SpinSliderHandlers(StereoWidth)
+
+#undef SpinSliderHandlers
 
 private:
-   
-   const EffectParameterMethods& Parameters() const override;
+   unsigned mNumChans {};
+   Reverb_priv_t *mP;
 
-static constexpr EffectParameter RoomSize{ &EffectReverbSettings::mRoomSize,  L"RoomSize",
-                                            EffectReverbSettings::roomSizeDefault,      0,       100,  1  };
+   Params mParams;
 
-static constexpr EffectParameter PreDelay{ &EffectReverbSettings::mPreDelay,  L"Delay",
-                                            EffectReverbSettings::preDelayDefault,      0,       200,  1  };
+   bool mProcessingEvent;
 
-static constexpr EffectParameter Reverberance{ &EffectReverbSettings::mReverberance,  L"Reverberance",
-                                                EffectReverbSettings::reverberanceDefault,      0,       100,  1  };
+#define SpinSlider(n) \
+   wxSpinCtrl  *m ## n ## T; \
+   wxSlider    *m ## n ## S;
 
-static constexpr EffectParameter HfDamping{ &EffectReverbSettings::mHfDamping,  L"HfDamping",
-                                             EffectReverbSettings::hfDampingDefault,      0,       100,  1  };
+   SpinSlider(RoomSize)
+   SpinSlider(PreDelay)
+   SpinSlider(Reverberance)
+   SpinSlider(HfDamping)
+   SpinSlider(ToneLow)
+   SpinSlider(ToneHigh)
+   SpinSlider(WetGain)
+   SpinSlider(DryGain)
+   SpinSlider(StereoWidth)
 
-static constexpr EffectParameter ToneLow{ &EffectReverbSettings::mToneLow,  L"ToneLow",
-                                           EffectReverbSettings::toneLowDefault,     0,       100,  1  };
+#undef SpinSlider
 
-static constexpr EffectParameter ToneHigh{ &EffectReverbSettings::mToneHigh,   L"ToneHigh",
-                                            EffectReverbSettings::toneHighDefault,     0,       100,  1  };
+   wxCheckBox  *mWetOnlyC;
 
-static constexpr EffectParameter WetGain{ &EffectReverbSettings::mWetGain,   L"WetGain",
-                                           EffectReverbSettings::wetGainDefault,      -20,     10,   1  };
-
-static constexpr EffectParameter DryGain{ &EffectReverbSettings::mDryGain,   L"DryGain",
-                                           EffectReverbSettings::dryGainDefault,      -20,     10,   1  };
-
-static constexpr EffectParameter StereoWidth{ &EffectReverbSettings::mStereoWidth,   L"StereoWidth",
-                                               EffectReverbSettings::stereoWidthDefault,     0,       100,  1  };
-
-static constexpr EffectParameter WetOnly{ &EffectReverbSettings::mWetOnly,   L"WetOnly",
-                                           EffectReverbSettings::wetOnlyDefault,   false,   true, 1  };
+   DECLARE_EVENT_TABLE()
 };
 
 #endif

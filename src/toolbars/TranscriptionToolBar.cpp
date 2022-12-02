@@ -29,17 +29,16 @@
 #include <wx/intl.h>
 #endif // WX_PRECOMP
 
-#include "Envelope.h"
+#include "../Envelope.h"
 
 #include "AllThemeResources.h"
 #include "../AudioIO.h"
 #include "ImageManipulation.h"
 #include "../KeyboardCapture.h"
-#include "NoteTrack.h"
 #include "Project.h"
 #include "../ProjectAudioIO.h"
 #include "../ProjectAudioManager.h"
-#include "Envelope.h"
+#include "../Envelope.h"
 #include "ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../widgets/AButton.h"
@@ -831,7 +830,7 @@ void TranscriptionToolBar::OnCalibrate(wxCommandEvent & WXUNUSED(event))
 }
 
 #include "../LabelTrack.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "../TrackPanel.h"
 #include "../TrackPanelAx.h"
 #include "../tracks/labeltrack/ui/LabelTrackView.h"

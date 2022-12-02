@@ -26,7 +26,6 @@
 #include "../widgets/HelpSystem.h"
 #include "../widgets/NumericTextCtrl.h"
 #include "../widgets/AudacityMessageBox.h"
-#include "../widgets/VetoDialogHook.h"
 
 #include <cmath>
 #include <limits>
@@ -654,6 +653,7 @@ void ContrastDialog::OnReset(wxCommandEvent & /*event*/)
 #include "commands/CommandContext.h"
 #include "commands/CommandManager.h"
 #include "ProjectWindows.h"
+#include "../commands/ScreenshotCommand.h"
 
 namespace {
 
@@ -678,7 +678,7 @@ struct Handler : CommandHandlerObject {
          .Get< ContrastDialog >( sContrastDialogKey );
 
       contrastDialog->CentreOnParent();
-      if( VetoDialogHook::Call( contrastDialog ) )
+      if( ScreenshotCommand::MayCapture( contrastDialog ) )
          return;
       contrastDialog->Show();
    }

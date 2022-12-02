@@ -11,6 +11,8 @@
 #ifndef __AUDACITY_WIDGETS_FILECONFIG__
 #define __AUDACITY_WIDGETS_FILECONFIG__
 
+typedef struct IUnknown IUnknown;
+
 #include <memory>
 
 #include <wx/defs.h>
@@ -74,9 +76,8 @@ protected:
 #endif // wxUSE_BASE64
 
 protected:
-   //! Override to notify the user of error conditions involving writability of
-   //! config files.  Default implementation does nothing
-   virtual void Warn();
+   //! Override to notify the user of error conditions involving writability of config files
+   virtual void Warn() = 0;
 
    const FilePath &GetFilePath() const { return mLocalFilename; }
 
@@ -86,7 +87,7 @@ private:
    const wxString mLocalFilename;
    const wxString mGlobalFilename;
    const long mStyle;
-   std::unique_ptr<wxMBConv> mConv;
+   const wxMBConv & mConv;
 
    std::unique_ptr<wxFileConfig> mConfig;
 

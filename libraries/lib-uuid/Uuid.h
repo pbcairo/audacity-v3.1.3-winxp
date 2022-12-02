@@ -10,6 +10,8 @@
 
 #pragma once
 
+typedef struct IUnknown IUnknown;
+
 #include <array>
 #include <cstdint>
 #include <string>

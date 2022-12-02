@@ -11,7 +11,6 @@
 #include "../CrashReport.h" // for HAS_CRASH_REPORT
 #include "FileNames.h"
 #include "../HelpText.h"
-#include "../HelpUtilities.h"
 #include "../LogWindow.h"
 #include "../Menus.h"
 #include "../NoteTrack.h"
@@ -29,19 +28,67 @@
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/HelpSystem.h"
 
-#include "FrameStatisticsDialog.h"
-
 #if defined(HAVE_UPDATES_CHECK)
 #include "update/UpdateManager.h"
 #endif
 
-#ifdef HAS_AUDIOCOM_UPLOAD
-#include "cloud/audiocom/LinkAccountDialog.h"
-#endif
-
 // private helper classes and functions
-namespace
+namespace {
+
+void ShowDiagnostics(
+   AudacityProject &project, const wxString &info,
+   const TranslatableString &description, const wxString &defaultPath,
+   bool fixedWidth = false)
 {
+   auto &window = GetProjectFrame( project );
+   wxDialogWrapper dlg( &window, wxID_ANY, description);
+   dlg.SetName();
+   ShuttleGui S(&dlg, eIsCreating);
+
+   wxTextCtrl *text;
+   S.StartVerticalLay();
+   {
+      text = S.Id(wxID_STATIC)
+         .Style(wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH)
+         .AddTextWindow("");
+
+      wxButton *save = safenew wxButton(S.GetParent(), wxID_OK, _("&Save"));
+      S.AddStandardButtons(eCancelButton, save);
+   }
+   S.EndVerticalLay();
+
+   if (fixedWidth) {
+      auto style = text->GetDefaultStyle();
+      style.SetFontFamily( wxFONTFAMILY_TELETYPE );
+      text->SetDefaultStyle(style);
+   }
+
+   *text << info;
+
+   dlg.SetSize(350, 450);
+
+   if (dlg.ShowModal() == wxID_OK)
+   {
+      const auto fileDialogTitle = XO("Save %s").Format( description );
+      wxString fName = SelectFile(FileNames::Operation::Export,
+         fileDialogTitle,
+         wxEmptyString,
+         defaultPath,
+         wxT("txt"),
+         { FileNames::TextFiles },
+         wxFD_SAVE | wxFD_OVERWRITE_PROMPT | wxRESIZE_BORDER,
+         &window);
+      if (!fName.empty())
+      {
+         if (!text->SaveFile(fName))
+         {
+            AudacityMessageBox(
+               XO("Unable to save %s").Format( description ),
+               fileDialogTitle);
+         }
+      }
+   }
+}
 
 /** @brief Class which makes a dialog for displaying quick fixes to common issues.
  *
@@ -289,6 +336,17 @@ void OnAudioDeviceInfo(const CommandContext &context)
       XO("Audio Device Info"), wxT("deviceinfo.txt") );
 }
 
+#ifdef EXPERIMENTAL_MIDI_OUT
+void OnMidiDeviceInfo(const CommandContext &context)
+{
+   auto &project = context.project;
+   auto gAudioIO = AudioIOBase::Get();
+   auto info = GetMIDIDeviceInfo();
+   ShowDiagnostics( project, info,
+      XO("MIDI Device Info"), wxT("midideviceinfo.txt") );
+}
+#endif
+
 void OnShowLog( const CommandContext &context )
 {
    LogWindow::Show();
@@ -388,23 +446,10 @@ void OnMenuTree(const CommandContext &context)
       Verbatim("Menu Tree"), wxT("menutree.txt"), true );
 }
 
-void OnFrameStatistics(const CommandContext&)
-{
-   FrameStatisticsDialog::Show(true);
-}
-
 #if defined(HAVE_UPDATES_CHECK)
 void OnCheckForUpdates(const CommandContext &WXUNUSED(context))
 {
     UpdateManager::GetInstance().GetUpdates(false, false);
-}
-#endif
-
-#ifdef HAS_AUDIOCOM_UPLOAD
-void OnLinkAccount(const CommandContext&)
-{
-   cloud::audiocom::LinkAccountDialog dialog;
-   dialog.ShowModal();
 }
 #endif
 
@@ -497,6 +542,11 @@ BaseItemSharedPtr HelpMenu()
             Command( wxT("DeviceInfo"), XXO("Au&dio Device Info..."),
                FN(OnAudioDeviceInfo),
                AudioIONotBusyFlag() ),
+      #ifdef EXPERIMENTAL_MIDI_OUT
+            Command( wxT("MidiDeviceInfo"), XXO("&MIDI Device Info..."),
+               FN(OnMidiDeviceInfo),
+               AudioIONotBusyFlag() ),
+      #endif
             Command( wxT("Log"), XXO("Show &Log..."), FN(OnShowLog),
                AlwaysEnabledFlag ),
       #if defined(HAS_CRASH_REPORT)
@@ -521,12 +571,7 @@ BaseItemSharedPtr HelpMenu()
             // Menu explorer.  Perhaps this should become a macro command
             Command( wxT("MenuTree"), Verbatim("Menu Tree..."),
                FN(OnMenuTree),
-               AlwaysEnabledFlag ),
-              
-            Command(
-                 wxT("FrameStatistics"), Verbatim("Frame Statistics..."),
-                 FN(OnFrameStatistics),
-                 AlwaysEnabledFlag)
+               AlwaysEnabledFlag )
       #endif
          )
    #ifndef __WXMAC__
@@ -536,18 +581,13 @@ BaseItemSharedPtr HelpMenu()
 #else
       ,
 #endif
-#ifdef HAS_AUDIOCOM_UPLOAD
-         Command(
-            wxT("LinkAccount"), XXO("L&ink audio.com account..."),
-            FN(OnLinkAccount), AlwaysEnabledFlag),
-#endif
          // DA: Does not fully support update checking.
    #if !defined(EXPERIMENTAL_DA) && defined(HAVE_UPDATES_CHECK)
          Command( wxT("Updates"), XXO("&Check for Updates..."),
             FN(OnCheckForUpdates),
             AlwaysEnabledFlag ),
    #endif
-         Command( wxT("About"), XXO("&About Audacity"), FN(OnAbout),
+         Command( wxT("About"), XXO("&About Audacity..."), FN(OnAbout),
             AlwaysEnabledFlag )
       )
    ) ) };

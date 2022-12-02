@@ -11,7 +11,9 @@
 #ifndef __AUDACITY_TRACK_PANEL__
 #define __AUDACITY_TRACK_PANEL__
 
-#include <chrono>
+
+
+
 #include <vector>
 
 #include <wx/setup.h> // for wxUSE_* macros
@@ -23,14 +25,11 @@
 #include "SelectedRegion.h"
 
 #include "CellularPanel.h"
-#include "Observer.h"
 
 #include "commands/CommandManagerWindowClasses.h"
 
 
 class wxRect;
-
-struct AudioIOEvent;
 
 // All cells of the TrackPanel are subclasses of this
 class CommonTrackPanelCell;
@@ -54,7 +53,9 @@ struct TrackPanelDrawingContext;
 
 enum class UndoPush : unsigned char;
 
-static constexpr auto  kTimerInterval = std::chrono::milliseconds{50};
+enum {
+   kTimerInterval = 50, // milliseconds
+};
 
 const int DragThreshold = 3;// Anything over 3 pixels is a drag, else a click.
 
@@ -81,15 +82,15 @@ class AUDACITY_DLL_API TrackPanel final
 
    void UpdatePrefs() override;
 
-   void OnAudioIO(AudioIOEvent);
+   void OnAudioIO(wxCommandEvent & evt);
 
    void OnPaint(wxPaintEvent & event);
    void OnMouseEvent(wxMouseEvent & event);
    void OnKeyDown(wxKeyEvent & event);
 
-   void OnTrackListResizing(const TrackListEvent &event);
-   void OnTrackListDeletion();
-   void OnEnsureVisible(const TrackListEvent & event);
+   void OnTrackListResizing(TrackListEvent & event);
+   void OnTrackListDeletion(wxEvent & event);
+   void OnEnsureVisible(TrackListEvent & event);
    void UpdateViewIfNoTracks(); // Call this to update mViewInfo, etc, after track(s) removal, before Refresh().
 
    double GetMostRecentXPos();
@@ -98,9 +99,9 @@ class AUDACITY_DLL_API TrackPanel final
    void OnIdle(wxIdleEvent & event);
    void OnTimer(wxTimerEvent& event);
    void OnProjectSettingsChange(wxCommandEvent &event);
-   void OnTrackFocusChange(struct TrackFocusChangeMessage);
+   void OnTrackFocusChange( wxCommandEvent &event );
 
-   void OnUndoReset(struct UndoRedoMessage);
+   void OnUndoReset( wxCommandEvent &event );
 
    void Refresh
       (bool eraseBackground = true, const wxRect *rect = (const wxRect *) NULL)
@@ -184,13 +185,6 @@ public:
 public:
 
 protected:
-   Observer::Subscription mTrackListSubscription
-      , mAudioIOSubscription
-      , mUndoSubscription
-      , mFocusChangeSubscription
-      , mRealtimeEffectManagerSubscription
-   ;
-
    TrackPanelListener *mListener;
 
    std::shared_ptr<TrackList> mTracks;

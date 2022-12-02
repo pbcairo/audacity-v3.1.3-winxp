@@ -18,8 +18,6 @@ Paul Licameli split from AudioIO.cpp
 #include "Meter.h"
 #include "Prefs.h"
 
-#include "portaudio.h"
-
 #if USE_PORTMIXER
 #include "portmixer.h"
 #endif
@@ -328,7 +326,7 @@ void AudioIOBase::SetPlaybackMeter(
 
 bool AudioIOBase::IsPaused() const
 {
-   return mPaused.load(std::memory_order_relaxed);
+   return mPaused;
 }
 
 bool AudioIOBase::IsBusy() const
@@ -940,8 +938,6 @@ DoubleSetting AudioIOLatencyDuration{
    L"/AudioIO/LatencyDuration", 100.0 };
 StringSetting AudioIOPlaybackDevice{
    L"/AudioIO/PlaybackDevice", L"" };
-StringSetting AudioIOPlaybackSource{
-   L"/AudioIO/PlaybackSource", L"" };
 DoubleSetting AudioIOPlaybackVolume {
    L"/AudioIO/PlaybackVolume", 1.0 };
 IntSetting AudioIORecordChannels{

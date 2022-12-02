@@ -13,6 +13,7 @@
 
 #include <math.h>
 
+#include <wx/app.h>
 #include <wx/dcclient.h>
 #include <wx/defs.h>
 #include <wx/dcmemory.h>
@@ -121,12 +122,13 @@ LyricsPanel::LyricsPanel(wxWindow* parent, wxWindowID id,
 
    parent->Bind(wxEVT_SHOW, &LyricsPanel::OnShow, this);
 
-   if (project)
-      mUndoSubscription = UndoManager::Get(*project)
-         .Subscribe(*this, &LyricsPanel::UpdateLyrics);
+   project->Bind(EVT_UNDO_PUSHED, &LyricsPanel::UpdateLyrics, this);
+   project->Bind(EVT_UNDO_MODIFIED, &LyricsPanel::UpdateLyrics, this);
+   project->Bind(EVT_UNDO_OR_REDO, &LyricsPanel::UpdateLyrics, this);
+   project->Bind(EVT_UNDO_RESET, &LyricsPanel::UpdateLyrics, this);
 
-   mAudioIOSubscription =
-      AudioIO::Get()->Subscribe(*this, &LyricsPanel::OnStartStop);
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK, &LyricsPanel::OnStartStop, this);
+   wxTheApp->Bind(EVT_AUDIOIO_CAPTURE, &LyricsPanel::OnStartStop, this);
 }
 
 LyricsPanel::~LyricsPanel()
@@ -475,22 +477,10 @@ void LyricsPanel::Update(double t)
    }
 }
 
-void LyricsPanel::UpdateLyrics(UndoRedoMessage message)
+void LyricsPanel::UpdateLyrics(wxEvent &e)
 {
-   switch (message.type) {
-   case UndoRedoMessage::Pushed:
-   case UndoRedoMessage::Modified:
-   case UndoRedoMessage::UndoOrRedo:
-   case UndoRedoMessage::Reset:
-      break;
-   default:
-      return;
-   }
-   DoUpdateLyrics();
-}
+   e.Skip();
 
-void LyricsPanel::DoUpdateLyrics()
-{
    // It's crucial to not do that repopulating during playback.
    auto gAudioIO = AudioIOBase::Get();
    if (gAudioIO->IsStreamActive()) {
@@ -523,13 +513,12 @@ void LyricsPanel::DoUpdateLyrics()
    Update(selectedRegion.t0());
 }
 
-void LyricsPanel::OnStartStop(AudioIOEvent e)
+void LyricsPanel::OnStartStop(wxCommandEvent &e)
 {
-   if (e.type == AudioIOEvent::MONITOR)
-      return;
-   if ( !e.on && mDelayedUpdate ) {
+   e.Skip();
+   if ( !e.GetInt() && mDelayedUpdate ) {
       mDelayedUpdate = false;
-      DoUpdateLyrics();
+      UpdateLyrics( e );
    }
 }
 
@@ -537,7 +526,7 @@ void LyricsPanel::OnShow(wxShowEvent &e)
 {
    e.Skip();
    if (e.IsShown())
-      DoUpdateLyrics();
+      UpdateLyrics(e);
 }
 
 void LyricsPanel::OnKeyEvent(wxKeyEvent & event)

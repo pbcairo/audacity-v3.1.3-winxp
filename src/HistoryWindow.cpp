@@ -19,6 +19,7 @@ undo memory so as to free up space.
 
 #include "HistoryWindow.h"
 
+#include <wx/app.h>
 #include <wx/defs.h>
 #include <wx/button.h>
 #include <wx/dialog.h>
@@ -35,7 +36,6 @@ undo memory so as to free up space.
 #include "AudioIO.h"
 #include "Clipboard.h"
 #include "CommonCommandFlags.h"
-#include "Diags.h"
 #include "../images/Arrow.xpm"
 #include "../images/Empty9x16.xpm"
 #include "UndoManager.h"
@@ -46,69 +46,6 @@ undo memory so as to free up space.
 #include "ShuttleGui.h"
 #include "widgets/AudacityMessageBox.h"
 #include "widgets/HelpSystem.h"
-
-#include <unordered_set>
-#include "SampleBlock.h"
-#include "WaveTrack.h"
-
-namespace {
-struct SpaceUsageCalculator {
-   using Type = unsigned long long;
-   using SpaceArray = std::vector<Type> ;
-
-   Type CalculateUsage(const TrackList &tracks, SampleBlockIDSet &seen)
-   {
-      Type result = 0;
-      //TIMER_START( "CalculateSpaceUsage", space_calc );
-      InspectBlocks(
-         tracks,
-         BlockSpaceUsageAccumulator( result ),
-         &seen
-      );
-      return result;
-   }
-
-   SpaceArray space;
-   Type clipboardSpaceUsage;
-
-   void Calculate( UndoManager &manager )
-   {
-      SampleBlockIDSet seen;
-
-      // After copies and pastes, a block file may be used in more than
-      // one place in one undo history state, and it may be used in more than
-      // one undo history state.  It might even be used in two states, but not
-      // in another state that is between them -- as when you have state A,
-      // then make a cut to get state B, but then paste it back into state C.
-
-      // So be sure to count each block file once only, in the last undo item that
-      // contains it.
-
-      // Why the last and not the first? Because the user of the History dialog
-      // may DELETE undo states, oldest first.  To reclaim disk space you must
-      // DELETE all states containing the block file.  So the block file's
-      // contribution to space usage should be counted only in that latest
-      // state.
-
-      manager.VisitStates(
-         [this, &seen]( const UndoStackElem &elem ){
-            // Scan all tracks at current level
-            auto &tracks = *elem.state.tracks;
-            space.push_back(CalculateUsage(tracks, seen));
-         },
-         true // newest state first
-      );
-
-      // Count the usage of the clipboard separately, using another set.  Do not
-      // multiple-count any block occurring multiple times within the clipboard.
-      seen.clear();
-      clipboardSpaceUsage = CalculateUsage(
-         Clipboard::Get().GetTracks(), seen);
-
-      //TIMER_STOP( space_calc );
-   }
-};
-}
 
 enum {
    ID_AVAIL = 1000,
@@ -150,14 +87,21 @@ HistoryDialog::HistoryDialog(AudacityProject *parent, UndoManager *manager):
    ShuttleGui S(this, eIsCreating);
    Populate(S);
 
-   mAudioIOSubscription = AudioIO::Get()->Subscribe(*this, &HistoryDialog::OnAudioIO);
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK,
+                     &HistoryDialog::OnAudioIO,
+                     this);
+
+   wxTheApp->Bind(EVT_AUDIOIO_CAPTURE,
+                     &HistoryDialog::OnAudioIO,
+                     this);
 
    Clipboard::Get().Bind(
-      EVT_CLIPBOARD_CHANGE, &HistoryDialog::UpdateDisplayForClipboard, this);
-
-   if (parent)
-      mUndoSubscription = UndoManager::Get(*parent)
-         .Subscribe(*this, &HistoryDialog::UpdateDisplay);
+      EVT_CLIPBOARD_CHANGE, &HistoryDialog::UpdateDisplay, this);
+   parent->Bind(EVT_UNDO_PUSHED, &HistoryDialog::UpdateDisplay, this);
+   parent->Bind(EVT_UNDO_MODIFIED, &HistoryDialog::UpdateDisplay, this);
+   parent->Bind(EVT_UNDO_OR_REDO, &HistoryDialog::UpdateDisplay, this);
+   parent->Bind(EVT_UNDO_RESET, &HistoryDialog::UpdateDisplay, this);
+   parent->Bind(EVT_UNDO_PURGE, &HistoryDialog::UpdateDisplay, this);
 }
 
 void HistoryDialog::Populate(ShuttleGui & S)
@@ -236,11 +180,14 @@ void HistoryDialog::Populate(ShuttleGui & S)
    mList->SetTextColour(wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
 }
 
-void HistoryDialog::OnAudioIO(AudioIOEvent evt)
+void HistoryDialog::OnAudioIO(wxCommandEvent& evt)
 {
-   if (evt.type == AudioIOEvent::MONITOR)
-      return;
-   mAudioIOBusy = evt.on;
+   evt.Skip();
+
+   if (evt.GetInt() != 0)
+      mAudioIOBusy = true;
+   else
+      mAudioIOBusy = false;
 
 #if defined(ALLOW_DISCARD)
    mDiscard->Enable(!mAudioIOBusy);
@@ -248,29 +195,9 @@ void HistoryDialog::OnAudioIO(AudioIOEvent evt)
 #endif
 }
 
-void HistoryDialog::UpdateDisplayForClipboard(wxEvent& e)
+void HistoryDialog::UpdateDisplay(wxEvent& e)
 {
    e.Skip();
-   DoUpdateDisplay();
-}
-
-void HistoryDialog::UpdateDisplay(UndoRedoMessage message)
-{
-   switch (message.type) {
-   case UndoRedoMessage::Pushed:
-   case UndoRedoMessage::Modified:
-   case UndoRedoMessage::UndoOrRedo:
-   case UndoRedoMessage::Reset:
-   case UndoRedoMessage::Purge:
-      break;
-   default:
-      return;
-   }
-   DoUpdateDisplay();
-}
-
-void HistoryDialog::DoUpdateDisplay()
-{
    if(IsShown())
       DoUpdate();
 }
@@ -284,34 +211,25 @@ bool HistoryDialog::Show( bool show )
 
 void HistoryDialog::DoUpdate()
 {
-   int i = 0;
+   int i;
 
-   SpaceUsageCalculator calculator;
-   calculator.Calculate( *mManager );
-
-   // point to size for oldest state
-   auto iter = calculator.space.rbegin();
+   mManager->CalculateSpaceUsage();
 
    mList->DeleteAllItems();
 
    wxLongLong_t total = 0;
    mSelected = mManager->GetCurrentState();
-   mManager->VisitStates(
-      [&]( const UndoStackElem &elem ){
-         const auto space = *iter++;
-         total += space;
-         const auto size = Internat::FormatSize(space);
-         const auto &desc = elem.description;
-         mList->InsertItem(i, desc.Translation(), i == mSelected ? 1 : 0);
-         mList->SetItem(i, 1, size.Translation());
-         ++i;
-      },
-      false // oldest state first
-   );
+   for (i = 0; i < (int)mManager->GetNumStates(); i++) {
+      TranslatableString desc, size;
+
+      total += mManager->GetLongDescription(i, &desc, &size);
+      mList->InsertItem(i, desc.Translation(), i == mSelected ? 1 : 0);
+      mList->SetItem(i, 1, size.Translation());
+   }
 
    mTotal->SetValue(Internat::FormatSize(total).Translation());
 
-   auto clipboardUsage = calculator.clipboardSpaceUsage;
+   auto clipboardUsage = mManager->GetClipboardSpaceUsage();
    mClipboard->SetValue(Internat::FormatSize(clipboardUsage).Translation());
 #if defined(ALLOW_DISCARD)
    FindWindowById(ID_DISCARD_CLIPBOARD)->Enable(clipboardUsage > 0);
@@ -564,7 +482,7 @@ AttachedItem sAttachment{ wxT("View/Windows"),
    ( FinderScope{ findCommandHandler },
    /* i18n-hint: Clicking this menu item shows the various editing steps
       that have been taken.*/
-      Command( wxT("UndoHistory"), XXO("&History"), &Handler::OnHistory,
+      Command( wxT("UndoHistory"), XXO("&History..."), &Handler::OnHistory,
          AudioIONotBusyFlag() ) )
 };
 

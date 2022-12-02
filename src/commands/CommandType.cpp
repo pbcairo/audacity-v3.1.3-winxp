@@ -23,17 +23,18 @@ Also acts as a factory.
 #include <wx/string.h>
 
 OldStyleCommandType::OldStyleCommandType()
-   : mSignature{}
-{
-}
+   : mSymbol{}, mSignature{}
+{ }
 
 OldStyleCommandType::~OldStyleCommandType()
 {
 }
 
-ComponentInterfaceSymbol OldStyleCommandType::GetSymbol() const
+ComponentInterfaceSymbol OldStyleCommandType::GetSymbol()
 {
-   return BuildName();
+   if (mSymbol.empty())
+      mSymbol = BuildName();
+   return mSymbol;
 }
 
 CommandSignature &OldStyleCommandType::GetSignature()

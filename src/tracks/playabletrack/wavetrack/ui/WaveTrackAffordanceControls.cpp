@@ -19,14 +19,13 @@
 #include "../../../../commands/CommandFunctors.h"
 #include "../../../../commands/CommandManager.h"
 #include "../../../../TrackPanelMouseEvent.h"
-#include "../../../../TrackArt.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelDrawingContext.h"
 #include "../../../../TrackPanelResizeHandle.h"
 #include "ViewInfo.h"
 #include "../../../../WaveTrack.h"
 #include "../../../../WaveClip.h"
-#include "UndoManager.h"
+#include "../../../../UndoManager.h"
 #include "../../../../ShuttleGui.h"
 #include "../../../../ProjectWindows.h"
 #include "../../../../commands/AudacityCommand.h"
@@ -36,7 +35,7 @@
 #include "WaveTrackView.h"//need only ClipParameters
 #include "WaveTrackAffordanceHandle.h"
 
-#include "ProjectHistory.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../ProjectSettings.h"
 #include "../../../../SelectionState.h"
 #include "../../../../RefreshCode.h"
@@ -57,7 +56,7 @@ class SetWaveClipNameCommand : public AudacityCommand
 public:
     static const ComponentInterfaceSymbol Symbol;
 
-    ComponentInterfaceSymbol GetSymbol() const override
+    ComponentInterfaceSymbol GetSymbol() override
     {
         return Symbol;
     }
@@ -139,8 +138,9 @@ WaveTrackAffordanceControls::WaveTrackAffordanceControls(const std::shared_ptr<T
 {
     if (auto trackList = pTrack->GetOwner())
     {
-        mSubscription = trackList->Subscribe(
-            *this, &WaveTrackAffordanceControls::OnTrackChanged);
+        trackList->Bind(EVT_TRACKLIST_SELECTION_CHANGE,
+            &WaveTrackAffordanceControls::OnTrackChanged,
+            this);
     }
 }
 
@@ -219,8 +219,7 @@ std::vector<UIHandlePtr> WaveTrackAffordanceControls::HitTest(const TrackPanelMo
     {
         results.push_back(
             SelectHandle::HitTest(
-                mSelectHandle, state, pProject,
-                TrackView::Get(*track).shared_from_this()
+                mSelectHandle, state, pProject, std::static_pointer_cast<TrackView>(track->GetTrackView())
             )
         );
     }
@@ -264,14 +263,12 @@ void WaveTrackAffordanceControls::Draw(TrackPanelDrawingContext& context, const 
                 auto highlight = selected || affordanceRect.Contains(px, py);
                 if (mTextEditHelper && mEditedClip.lock() == clip)
                 {
-                    auto titleRect = TrackArt::DrawClipAffordance(context.dc, affordanceRect, wxEmptyString, highlight, selected);
-                    mTextEditHelper->Draw(context.dc, titleRect);
+                    TrackArt::DrawClipAffordance(context.dc, affordanceRect, wxEmptyString, highlight, selected);
+                    mTextEditHelper->Draw(context.dc, TrackArt::GetAffordanceTitleRect(affordanceRect));
                 }
                 else
-                {
-                    auto titleRect = TrackArt::DrawClipAffordance(context.dc, affordanceRect, clip->GetName(), highlight, selected);
-                    mClipNameVisible = !titleRect.IsEmpty();
-                }
+                    TrackArt::DrawClipAffordance(context.dc, affordanceRect, clip->GetName(), highlight, selected);
+
             }
         }
 
@@ -304,10 +301,6 @@ bool WaveTrackAffordanceControls::StartEditClipName(AudacityProject* project)
         {
             if (mTextEditHelper)
                 mTextEditHelper->Finish(project);
-
-            if(!mClipNameVisible)
-                //Clip name isn't visible, there is no point in showing editor then
-                return false;
 
             mEditedClip = lock;
             mTextEditHelper = MakeTextEditHelper(clip->GetName());
@@ -444,10 +437,10 @@ void WaveTrackAffordanceControls::ResetClipNameEdit()
     mEditedClip.reset();
 }
 
-void WaveTrackAffordanceControls::OnTrackChanged(const TrackListEvent& evt)
+void WaveTrackAffordanceControls::OnTrackChanged(TrackListEvent& evt)
 {
-    if (evt.mType == TrackListEvent::SELECTION_CHANGE)
-       ExitTextEditing();
+    evt.Skip();
+    ExitTextEditing();
 }
 
 unsigned WaveTrackAffordanceControls::ExitTextEditing()

@@ -19,7 +19,6 @@ struct WaveTrackSubViewType;
 
 class CutlineHandle;
 class TranslatableString;
-class SampleTrack;
 class WaveTrack;
 class WaveTrackView;
 class WaveClip;
@@ -30,9 +29,11 @@ class ZoomInfo;
 class TrackPanelResizeHandle;
 class WaveTrackAffordanceHandle;
 
-class SubViewCloseHandle;
-class SubViewAdjustHandle;
-class SubViewRearrangeHandle;
+namespace {
+   class SubViewCloseHandle;
+   class SubViewAdjustHandle;
+   class SubViewRearrangeHandle;
+}
 
 class wxDC;
 
@@ -106,8 +107,6 @@ public:
 
    static WaveTrackView &Get( WaveTrack &track );
    static const WaveTrackView &Get( const WaveTrack &track );
-   static WaveTrackView *Find( WaveTrack *pTrack );
-   static const WaveTrackView *Find( const WaveTrack *pTrack );
 
    explicit
    WaveTrackView( const std::shared_ptr<Track> &pTrack );
@@ -183,7 +182,7 @@ public:
 
    //FIXME: These functions do not push state to undo history
    //because attempt to do so leads to a focus lose which, in
-   //turn finalizes text editing (state is saved after text
+   //turn finilizes text editing (state is saved after text
    //editing was intentionally finished instead)
 
    bool CutSelectedText(AudacityProject& project);
@@ -240,9 +239,8 @@ class ZoomInfo;
 struct AUDACITY_DLL_API ClipParameters
 {
    // Do a bunch of calculations common to waveform and spectrum drawing.
-   ClipParameters(
-      bool spectrum, const SampleTrack *track,
-      const WaveClip *clip, const wxRect &rect,
+   ClipParameters
+      (bool spectrum, const WaveTrack *track, const WaveClip *clip, const wxRect &rect,
       const SelectedRegion &selectedRegion, const ZoomInfo &zoomInfo);
 
    double tOffset;

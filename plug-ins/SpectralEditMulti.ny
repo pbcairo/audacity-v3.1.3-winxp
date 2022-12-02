@@ -1,20 +1,21 @@
 $nyquist plug-in
 $version 4
 $type process spectral
-$name (_ "Spectral Edit Multi Tool")
+$name (_ "Spectral edit multi tool")
+$manpage "Spectral_edit_multi_tool"
+$action (_ "Filtering...")
 $author (_ "Paul Licameli")
-$release 2.3.0-1
-$copyright (_ "GNU General Public License v2.0")
-
-;; License: GPL v2
-;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
-;;
-;; For information about writing and modifying Nyquist plug-ins:
-;; https://wiki.audacityteam.org/wiki/Nyquist_Plug-ins_Reference
+$release 2.3.0
+$copyright (_ "Released under terms of the GNU General Public License version 2")
 
 ;; SpectralEditMulti.ny by Paul Licameli, November 2014.
 ;; Updated by Steve Daulton 2014 / 2015.
 
+;; Released under terms of the GNU General Public License version 2:
+;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+;;
+;; For information about writing and modifying Nyquist plug-ins:
+;; https://wiki.audacityteam.org/wiki/Nyquist_Plug-ins_Reference
 
 (defun wet (sig f0 f1 fc)
   (cond
@@ -47,7 +48,7 @@ $copyright (_ "GNU General Public License v2.0")
                   p-err f0)))
       ;; Biqud filter fails if centre frequency is very low and bandwidth very high.
       ;; 'Magic numbers' 10 Hz and 10 octaves are experimental.
-      ((and f0 (< f0 10) bw (> bw 10))
+      ((and f0 (< f0 10) (or (not bw)(> bw 10)))
         (throw 'error-message
           (format nil (_ "~aNotch filter parameters cannot be applied.~%~
                       Try increasing the low frequency bound~%~

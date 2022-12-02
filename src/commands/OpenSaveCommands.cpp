@@ -34,18 +34,11 @@ const ComponentInterfaceSymbol OpenProjectCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< OpenProjectCommand > reg; }
 
-template<bool Const>
-bool OpenProjectCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define( mFileName, wxT("Filename"), wxString{"test.aup3"} );
+bool OpenProjectCommand::DefineParams( ShuttleParams & S ){
+   S.Define( mFileName, wxT("Filename"),  "test.aup3" );
    S.OptionalN(bHasAddToHistory).Define( mbAddToHistory, wxT("AddToHistory"),  false );
    return true;
 }
-
-bool OpenProjectCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool OpenProjectCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void OpenProjectCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -90,18 +83,11 @@ const ComponentInterfaceSymbol SaveProjectCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< SaveProjectCommand > reg2; }
 
-template<bool Const>
-bool SaveProjectCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define( mFileName, wxT("Filename"), wxString{"name.aup3"} );
+bool SaveProjectCommand::DefineParams( ShuttleParams & S ){
+   S.Define( mFileName, wxT("Filename"),  "name.aup3" );
    S.Define( mbAddToHistory, wxT("AddToHistory"),  false );
    return true;
 }
-
-bool SaveProjectCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool SaveProjectCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void SaveProjectCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -129,17 +115,10 @@ const ComponentInterfaceSymbol SaveCopyCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< SaveCopyCommand > reg3; }
 
-template<bool Const>
-bool SaveCopyCommand::VisitSettings( SettingsVisitorBase<Const> & S ){
-   S.Define( mFileName, wxT("Filename"), wxString{"name.aup3"} );
+bool SaveCopyCommand::DefineParams( ShuttleParams & S ){
+   S.Define( mFileName, wxT("Filename"),  "name.aup3" );
    return true;
 }
-
-bool SaveCopyCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool SaveCopyCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void SaveCopyCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -163,18 +142,11 @@ const ComponentInterfaceSymbol SaveLogCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< SaveLogCommand > reg4; }
 
-template<bool Const>
-bool SaveLogCommand::VisitSettings(SettingsVisitorBase<Const> & S)
+bool SaveLogCommand::DefineParams(ShuttleParams & S)
 {
-   S.Define( mFileName, wxT("Filename"), wxString{"log.txt"} );
+   S.Define( mFileName, wxT("Filename"),  "log.txt" );
    return true;
 }
-
-bool SaveLogCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool SaveLogCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 void SaveLogCommand::PopulateOrExchange(ShuttleGui & S)
 {
@@ -198,17 +170,10 @@ const ComponentInterfaceSymbol ClearLogCommand::Symbol
 
 namespace{ BuiltinCommandsModule::Registration< ClearLogCommand > reg5; }
 
-template<bool Const>
-bool ClearLogCommand::VisitSettings(SettingsVisitorBase<Const> & S)
+bool ClearLogCommand::DefineParams(ShuttleParams & S)
 {
    return true;
 }
-
-bool ClearLogCommand::VisitSettings( SettingsVisitor & S )
-   { return VisitSettings<false>(S); }
-
-bool ClearLogCommand::VisitSettings( ConstSettingsVisitor & S )
-   { return VisitSettings<true>(S); }
 
 bool ClearLogCommand::PromptUser(wxWindow *parent)
 {

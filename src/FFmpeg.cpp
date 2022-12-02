@@ -5,7 +5,7 @@ Audacity: A Digital Audio Editor
 FFmpeg.cpp
 
 Audacity(R) is copyright (c) 1999-2009 Audacity Team.
-License: GPL v2 or later.  See License.txt.
+License: GPL v2.  See License.txt.
 
 ******************************************************************//**
 
@@ -307,6 +307,38 @@ BEGIN_EVENT_TABLE(FFmpegNotFoundDialog, wxDialogWrapper)
    EVT_BUTTON(wxID_OK, FFmpegNotFoundDialog::OnOk)
 END_EVENT_TABLE()
 
+struct SafeAVFormatPathUpdater final
+{
+   explicit SafeAVFormatPathUpdater(const wxString& newPath)
+   {
+      mHasOldValue = AVFormatPath.Read(&mOldValue);
+
+      AVFormatPath.Write(newPath);
+   }
+
+   ~SafeAVFormatPathUpdater()
+   {
+      if (mRevertToOld)   
+      {
+         if (mHasOldValue)
+            AVFormatPath.Write(mOldValue);
+         else
+            AVFormatPath.Delete();
+      }
+
+      gPrefs->Flush();
+   }
+
+   void CommitValue() noexcept
+   {
+      mRevertToOld = false;
+   }
+
+   wxString mOldValue;
+   bool mHasOldValue;
+   bool mRevertToOld { true };
+};
+
 bool FindFFmpegLibs(wxWindow* parent)
 {
    wxString path;
@@ -342,8 +374,7 @@ bool FindFFmpegLibs(wxWindow* parent)
 
    wxLogMessage(wxT("User-specified path = '%s'"), path);
 
-   SettingTransaction transaction;
-   AVFormatPath.Write(path);
+   SafeAVFormatPathUpdater updater(path);
 
    // Try to load FFmpeg from the user provided path
    if (!FFmpegFunctions::Load(true))
@@ -352,7 +383,7 @@ bool FindFFmpegLibs(wxWindow* parent)
       return false;
    }
 
-   transaction.Commit();
+   updater.CommitValue();
 
    wxLogMessage(wxT("User-specified FFmpeg file exists. Success."));
 

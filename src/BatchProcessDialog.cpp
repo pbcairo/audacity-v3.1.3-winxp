@@ -48,7 +48,6 @@
 #include "ProjectManager.h"
 #include "ProjectWindow.h"
 #include "SelectUtilities.h"
-#include "Track.h"
 #include "commands/CommandManager.h"
 #include "effects/Effect.h"
 #include "../images/Arrow.xpm"

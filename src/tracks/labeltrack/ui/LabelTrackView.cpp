@@ -22,20 +22,18 @@ Paul Licameli split from TrackPanel.cpp
 #include "AllThemeResources.h"
 #include "../../../HitTestResult.h"
 #include "Project.h"
-#include "ProjectHistory.h"
+#include "../../../ProjectHistory.h"
 #include "ProjectRate.h"
 #include "../../../ProjectSettings.h"
 #include "../../../ProjectWindow.h"
 #include "../../../ProjectWindows.h"
 #include "../../../RefreshCode.h"
-#include "../../../SyncLock.h"
 #include "Theme.h"
-#include "../../../TrackArt.h"
 #include "../../../TrackArtist.h"
 #include "../../../TrackPanelAx.h"
 #include "../../../TrackPanel.h"
 #include "../../../TrackPanelMouseEvent.h"
-#include "UndoManager.h"
+#include "../../../UndoManager.h"
 #include "ViewInfo.h"
 #include "../../../widgets/AudacityTextEntryDialog.h"
 #include "../../../widgets/wxWidgetsWindowPlacement.h"
@@ -805,7 +803,7 @@ void LabelTrackView::Draw
 
    TrackArt::DrawBackgroundWithSelection( context, r, pTrack.get(),
       AColor::labelSelectedBrush, AColor::labelUnselectedBrush,
-      SyncLock::IsSelectedOrSyncLockSelected(pTrack.get()) );
+      ( pTrack->GetSelected() || pTrack->IsSyncLockSelected() ) );
 
    wxCoord textWidth, textHeight;
 
@@ -1769,7 +1767,6 @@ bool LabelTrackView::DoKeyDown(
                mInitialCursorPos = mCurrentCursorPos;
                //Set the selection region to be equal to the selection bounds of the tabbed-to label.
                newSel = labelStruct.selectedRegion;
-               ProjectWindow::Get(project).ScrollIntoView(labelStruct.selectedRegion.t0());
                // message for screen reader
                /* i18n-hint:
                   String is replaced by the name of a label,
@@ -2316,8 +2313,9 @@ int LabelTrackView::DialogForLabelName(
       trackPanel.FindTrackRect( trackFocus.Get() ).GetBottomLeft();
    // The start of the text in the text box will be roughly in line with the label's position
    // if it's a point label, or the start of its region if it's a region label.
-   position.x += viewInfo.GetLeftOffset()
-      + std::max(0, static_cast<int>(viewInfo.TimeToPosition(region.t0())))
+   position.x +=
+      + std::max(0, static_cast<int>(viewInfo.TimeToPosition(
+         viewInfo.GetLeftOffset(), region.t0())))
       - 39;
    position.y += 2;  // just below the bottom of the track
    position = trackPanel.ClientToScreen(position);
@@ -2363,10 +2361,4 @@ std::shared_ptr<TrackVRulerControls> LabelTrackView::DoGetVRulerControls()
 {
    return
       std::make_shared<LabelTrackVRulerControls>( shared_from_this() );
-}
-
-using GetLabelTrackSyncLockPolicy =
-   GetSyncLockPolicy::Override< const LabelTrack >;
-DEFINE_ATTACHED_VIRTUAL_OVERRIDE(GetLabelTrackSyncLockPolicy) {
-   return [](auto &) { return SyncLockPolicy::EndSeparator; };
 }

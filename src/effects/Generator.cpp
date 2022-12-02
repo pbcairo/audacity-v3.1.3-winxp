@@ -18,7 +18,6 @@
 
 #include "Project.h"
 #include "Prefs.h"
-#include "SyncLock.h"
 #include "ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../prefs/TracksBehaviorsPrefs.h"
@@ -27,9 +26,11 @@
 
 #include "../widgets/AudacityMessageBox.h"
 
-bool Generator::Process(EffectInstance &, EffectSettings &settings)
+bool Generator::Process()
 {
-   const auto duration = settings.extra.GetDuration();
+   if (GetDuration() < 0.0)
+      return false;
+
 
    // Set up mOutputTracks.
    // This effect needs all for sync-lock grouping.
@@ -49,8 +50,7 @@ bool Generator::Process(EffectInstance &, EffectSettings &settings)
          //make sure there's room.
          if (!editClipCanMove &&
              track->IsEmpty(mT0, mT1+1.0/track->GetRate()) &&
-             !track->IsEmpty(mT0,
-               mT0 + duration - (mT1 - mT0) - 1.0 / track->GetRate()))
+             !track->IsEmpty(mT0, mT0+GetDuration()-(mT1-mT0)-1.0/track->GetRate()))
          {
             Effect::MessageBox(
                XO("There is not enough room available to generate the audio"),
@@ -61,7 +61,7 @@ bool Generator::Process(EffectInstance &, EffectSettings &settings)
             return;
          }
 
-         if (duration > 0.0)
+         if (GetDuration() > 0.0)
          {
             auto pProject = FindProject();
             // Create a temporary track
@@ -70,12 +70,12 @@ bool Generator::Process(EffectInstance &, EffectSettings &settings)
             BeforeGenerate();
 
             // Fill it with data
-            if (!GenerateTrack(settings, &*tmp, *track, ntrack))
+            if (!GenerateTrack(&*tmp, *track, ntrack))
                bGoodResult = false;
             else {
                // Transfer the data from the temporary track to the actual one
                tmp->Flush();
-               PasteTimeWarper warper{ mT1, mT0 + duration };
+               PasteTimeWarper warper{ mT1, mT0+GetDuration() };
                const auto &selectedRegion =
                   ViewInfo::Get( *pProject ).selectedRegion;
                track->ClearAndPaste(
@@ -98,8 +98,8 @@ bool Generator::Process(EffectInstance &, EffectSettings &settings)
          ntrack++;
       },
       [&](Track *t) {
-         if (SyncLock::IsSyncLockSelected(t)) {
-            t->SyncLockAdjust(mT1, mT0 + duration);
+         if (t->IsSyncLockSelected()) {
+            t->SyncLockAdjust(mT1, mT0 + GetDuration());
          }
       }
    );
@@ -109,17 +109,18 @@ bool Generator::Process(EffectInstance &, EffectSettings &settings)
 
       this->ReplaceProcessedTracks(bGoodResult);
 
-      mT1 = mT0 + duration; // Update selection.
+      mT1 = mT0 + GetDuration(); // Update selection.
    }
 
    return bGoodResult;
 }
 
-bool BlockGenerator::GenerateTrack(EffectSettings &settings,
-   WaveTrack *tmp, const WaveTrack &track, int ntrack)
+bool BlockGenerator::GenerateTrack(WaveTrack *tmp,
+                                   const WaveTrack &track,
+                                   int ntrack)
 {
    bool bGoodResult = true;
-   numSamples = track.TimeToLongSamples(settings.extra.GetDuration());
+   numSamples = track.TimeToLongSamples(GetDuration());
    decltype(numSamples) i = 0;
    Floats data{ tmp->GetMaxBlockSize() };
 

@@ -12,12 +12,11 @@
 
 #if defined(USE_VAMP)
 #include "LoadVamp.h"
-#include "ModuleManager.h"
+#include "../../ModuleManager.h"
 
 #include <wx/filename.h>
 
 #include "VampEffect.h"
-#include "wxArrayStringEx.h"
 
 #include <iostream>
 #include <map>
@@ -35,17 +34,17 @@ using namespace Vamp::HostExt;
 // When the module is builtin to Audacity, we use the same function, but it is
 // declared static so as not to clash with other builtin modules.
 // ============================================================================
-DECLARE_PROVIDER_ENTRY(AudacityModule)
+DECLARE_MODULE_ENTRY(AudacityModule)
 {
    // Create and register the importer
    // Trust the module manager not to leak this
-   return std::make_unique<VampEffectsModule>();
+   return safenew VampEffectsModule();
 }
 
 // ============================================================================
 // Register this as a builtin module
 // ============================================================================
-DECLARE_BUILTIN_PROVIDER(VampsEffectBuiltin);
+DECLARE_BUILTIN_MODULE(VampsEffectBuiltin);
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -65,34 +64,34 @@ VampEffectsModule::~VampEffectsModule()
 // ComponentInterface implementation
 // ============================================================================
 
-PluginPath VampEffectsModule::GetPath() const
+PluginPath VampEffectsModule::GetPath()
 {
    return {};
 }
 
-ComponentInterfaceSymbol VampEffectsModule::GetSymbol() const
+ComponentInterfaceSymbol VampEffectsModule::GetSymbol()
 {
    return XO("Vamp Effects");
 }
 
-VendorSymbol VampEffectsModule::GetVendor() const
+VendorSymbol VampEffectsModule::GetVendor()
 {
    return XO("The Audacity Team");
 }
 
-wxString VampEffectsModule::GetVersion() const
+wxString VampEffectsModule::GetVersion()
 {
    // This "may" be different if this were to be maintained as a separate DLL
    return VAMPEFFECTS_VERSION;
 }
 
-TranslatableString VampEffectsModule::GetDescription() const
+TranslatableString VampEffectsModule::GetDescription()
 {
    return XO("Provides Vamp Effects support to Audacity");
 }
 
 // ============================================================================
-// PluginProvider implementation
+// ModuleInterface implementation
 // ============================================================================
 
 bool VampEffectsModule::Initialize()
@@ -122,11 +121,12 @@ const FileExtensions &VampEffectsModule::GetFileExtensions()
    return empty;
 }
 
-void VampEffectsModule::AutoRegisterPlugins(PluginManagerInterface &)
+bool VampEffectsModule::AutoRegisterPlugins(PluginManagerInterface & WXUNUSED(pm))
 {
+   return false;
 }
 
-PluginPaths VampEffectsModule::FindModulePaths(PluginManagerInterface &)
+PluginPaths VampEffectsModule::FindPluginPaths(PluginManagerInterface & WXUNUSED(pm))
 {
    PluginPaths names;
 
@@ -225,8 +225,19 @@ unsigned VampEffectsModule::DiscoverPluginsAtPath(
    return 0;
 }
 
+bool VampEffectsModule::IsPluginValid(const PluginPath & path, bool bFast)
+{
+   int output;
+   bool hasParameters;
+   if( bFast )
+      return true;
+
+   auto vp = FindPlugin(path, output, hasParameters);
+   return bool(vp);
+}
+
 std::unique_ptr<ComponentInterface>
-VampEffectsModule::LoadPlugin(const PluginPath & path)
+VampEffectsModule::CreateInstance(const PluginPath & path)
 {
    // Acquires a resource for the application.
    int output;
@@ -237,22 +248,13 @@ VampEffectsModule::LoadPlugin(const PluginPath & path)
    return nullptr;
 }
 
-bool VampEffectsModule::CheckPluginExist(const PluginPath& path) const
-{
-   PluginLoader::PluginKey key = path.BeforeFirst(wxT('/')).ToUTF8().data();
-   const auto libraryPathUTF8 = PluginLoader::getInstance()->getLibraryPathForPlugin(key);
-   if(!libraryPathUTF8.empty())
-      return wxFileName::FileExists(wxString::FromUTF8(libraryPathUTF8));
-   return wxFileName::FileExists(path);
-}
-
 // VampEffectsModule implementation
 
 std::unique_ptr<Vamp::Plugin> VampEffectsModule::FindPlugin(const PluginPath & path,
                                       int & output,
                                       bool & hasParameters)
 {
-   PluginLoader::PluginKey key = path.BeforeFirst(wxT('/')).ToUTF8().data();
+   PluginLoader::PluginKey key = path.BeforeLast(wxT('/')).ToUTF8().data();
 
    std::unique_ptr<Plugin> vp{ PluginLoader::getInstance()->loadPlugin(key, 48000) }; // rate doesn't matter here
    if (!vp)

@@ -54,16 +54,15 @@
 #include "AllThemeResources.h"
 #include "BasicUI.h"
 #include "Mix.h"
-#include "MixAndRender.h"
 #include "Prefs.h"
 #include "../prefs/ImportExportPrefs.h"
 #include "Project.h"
-#include "ProjectHistory.h"
+#include "../ProjectHistory.h"
 #include "../ProjectSettings.h"
 #include "../ProjectWindow.h"
 #include "../ProjectWindows.h"
 #include "../ShuttleGui.h"
-#include "../TagsEditor.h"
+#include "../Tags.h"
 #include "Theme.h"
 #include "../WaveTrack.h"
 #include "../widgets/AudacityMessageBox.h"
@@ -228,7 +227,7 @@ std::unique_ptr<Mixer> ExportPlugin::CreateMixer(const TrackList &tracks,
          double outRate, sampleFormat outFormat,
          MixerSpec *mixerSpec)
 {
-   Mixer::Inputs inputs;
+   WaveTrackConstArray inputTracks;
 
    bool anySolo = !(( tracks.Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
 
@@ -236,10 +235,10 @@ std::unique_ptr<Mixer> ExportPlugin::CreateMixer(const TrackList &tracks,
       + (selectionOnly ? &Track::IsSelected : &Track::Any )
       - ( anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute);
    for (auto pTrack: range)
-      inputs.emplace_back(
-         pTrack->SharedPointer<const SampleTrack>(), GetEffectStages(*pTrack));
+      inputTracks.push_back(
+         pTrack->SharedPointer< const WaveTrack >() );
    // MB: the stop time should not be warped, this was a bug.
-   return std::make_unique<Mixer>(move(inputs),
+   return std::make_unique<Mixer>(inputTracks,
                   // Throw, to stop exporting, if read fails:
                   true,
                   Mixer::WarpOptions{tracks},
@@ -249,24 +248,19 @@ std::unique_ptr<Mixer> ExportPlugin::CreateMixer(const TrackList &tracks,
                   true, mixerSpec);
 }
 
-void ExportPlugin::InitProgress(std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+void ExportPlugin::InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
    const TranslatableString &title, const TranslatableString &message)
 {
    if (!pDialog)
       pDialog = std::make_unique<ProgressDialog>( title, message );
-   else
-   {
-      if (auto pd = dynamic_cast<ProgressDialog*>(pDialog.get()))
-      {
-         pd->SetTitle(title);
-         pd->Reinit();
-      }
-
-      pDialog->SetMessage(message);
+   else {
+      pDialog->SetTitle( title );
+      pDialog->SetMessage( message );
+      pDialog->Reinit();
    }
 }
 
-void ExportPlugin::InitProgress(std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+void ExportPlugin::InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
    const wxFileNameWrapper &title, const TranslatableString &message)
 {
    return InitProgress(
@@ -416,8 +410,7 @@ bool Exporter::DoEditMetadata(AudacityProject &project,
    // BEFORE doing any editing of it!
    auto newTags = tags.Duplicate();
 
-   if (TagsEditorDialog::ShowEditDialog(
-      *newTags, &GetProjectFrame( project ), title, force)) {
+   if (newTags->ShowEditDialog(&GetProjectFrame( project ), title, force)) {
       if (tags != *newTags) {
          // Commit the change to project state only now.
          Tags::Set( project, newTags );
@@ -469,8 +462,7 @@ bool Exporter::Process(bool selectedOnly, double t0, double t1)
    }
 
    // Export the tracks
-   std::unique_ptr<BasicUI::ProgressDialog> pDialog;
-   bool success = ExportTracks(pDialog);
+   bool success = ExportTracks();
 
    // Get rid of mixerspec
    mMixerSpec.reset();
@@ -490,15 +482,6 @@ bool Exporter::Process(unsigned numChannels,
                        const FileExtension &type, const wxString & filename,
                        bool selectedOnly, double t0, double t1)
 {
-   std::unique_ptr<BasicUI::ProgressDialog> pDialog;
-   return Process(numChannels, type, filename, selectedOnly, t0, t1, pDialog);
-}
-
-bool Exporter::Process(
-   unsigned numChannels, const FileExtension& type, const wxString& filename,
-   bool selectedOnly, double t0, double t1,
-   std::unique_ptr<BasicUI::ProgressDialog>& progressDialog)
-{
    // Save parms
    mChannels = numChannels;
    mFilename = filename;
@@ -508,8 +491,7 @@ bool Exporter::Process(
    mActualName = mFilename;
 
    int i = -1;
-   for (const auto& pPlugin : mPlugins)
-   {
+   for (const auto &pPlugin : mPlugins) {
       ++i;
       for (int j = 0; j < pPlugin->GetFormatCount(); j++)
       {
@@ -517,11 +499,11 @@ bool Exporter::Process(
          {
             mFormat = i;
             mSubFormat = j;
-            return CheckFilename() && ExportTracks(progressDialog);
+            return CheckFilename() && ExportTracks();
          }
       }
    }
-   
+
    return false;
 }
 
@@ -926,8 +908,7 @@ bool Exporter::CheckMix(bool prompt /*= true*/ )
    return true;
 }
 
-bool Exporter::ExportTracks(
-   std::unique_ptr<BasicUI::ProgressDialog>& progressDialog)
+bool Exporter::ExportTracks()
 {
    // Keep original in case of failure
    if (mActualName != mFilename) {
@@ -956,8 +937,9 @@ bool Exporter::ExportTracks(
       }
    } );
 
+   std::unique_ptr<ProgressDialog> pDialog;
    auto result = mPlugins[mFormat]->Export(mProject,
-                                       progressDialog,
+                                       pDialog,
                                        mChannels,
                                        mActualName.GetFullPath(),
                                        mSelectedOnly,
@@ -1092,8 +1074,7 @@ bool Exporter::ProcessFromTimerRecording(bool selectedOnly,
    }
 
    // Export the tracks
-   std::unique_ptr<BasicUI::ProgressDialog> pDialog;
-   bool success = ExportTracks(pDialog);
+   bool success = ExportTracks();
 
    // Get rid of mixerspec
    mMixerSpec.reset();

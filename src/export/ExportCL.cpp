@@ -13,8 +13,6 @@
 
 #include "ProjectRate.h"
 
-#include <thread>
-
 #include <wx/app.h>
 #include <wx/button.h>
 #include <wx/cmdline.h>
@@ -30,12 +28,12 @@
 #include "FileNames.h"
 #include "Export.h"
 
-#include "Mix.h"
+#include "../Mix.h"
 #include "Prefs.h"
 #include "../SelectFile.h"
 #include "../ShuttleGui.h"
 #include "../Tags.h"
-#include "Track.h"
+#include "../Track.h"
 #include "float_cast.h"
 #include "../widgets/FileHistory.h"
 #include "../widgets/AudacityMessageBox.h"
@@ -282,7 +280,7 @@ public:
    void OptionsCreate(ShuttleGui &S, int format) override;
 
    ProgressResult Export(AudacityProject *project,
-                         std::unique_ptr<BasicUI::ProgressDialog> &pDialog,
+                         std::unique_ptr<ProgressDialog> &pDialog,
                          unsigned channels,
                          const wxFileNameWrapper &fName,
                          bool selectedOnly,
@@ -355,7 +353,8 @@ ExportCL::ExportCL()
    SetDescription(XO("(external program)"),0);
 }
 
-ProgressResult ExportCL::Export(AudacityProject *project, std::unique_ptr<BasicUI::ProgressDialog>& pDialog,
+ProgressResult ExportCL::Export(AudacityProject *project,
+                                std::unique_ptr<ProgressDialog> &pDialog,
                                 unsigned channels,
                                 const wxFileNameWrapper &fName,
                                 bool selectionOnly,
@@ -530,9 +529,10 @@ ProgressResult ExportCL::Export(AudacityProject *project, std::unique_ptr<BasicU
 
          // Need to mix another block
          if (numBytes == 0) {
-            auto numSamples = mixer->Process();
-            if (numSamples == 0)
+            auto numSamples = mixer->Process(maxBlockLen);
+            if (numSamples == 0) {
                break;
+            }
 
             mixed = mixer->GetBuffer();
             numBytes = numSamples * channels;
@@ -563,15 +563,14 @@ ProgressResult ExportCL::Export(AudacityProject *project, std::unique_ptr<BasicU
          }
 
          // Update the progress display
-         updateResult = progress.Poll(mixer->MixGetCurrentTime() - t0, t1 - t0);
+         updateResult = progress.Update(mixer->MixGetCurrentTime() - t0, t1 - t0);
       }
       // Done with the progress display
    }
 
    // Wait for process to terminate
    while (process.IsActive()) {
-      using namespace std::chrono;
-      std::this_thread::sleep_for(10ms);
+      wxMilliSleep(10);
       wxTheApp->Yield();
    }
 

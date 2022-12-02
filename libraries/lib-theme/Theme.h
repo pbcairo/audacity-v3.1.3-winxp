@@ -14,16 +14,12 @@
 #ifndef __AUDACITY_THEME__
 #define __AUDACITY_THEME__
 
-#include <map>
-#include <unordered_set>
 #include <vector>
-#include <optional>
 #include <wx/arrstr.h>
 #include <wx/defs.h>
 #include <wx/gdicmn.h>
 #include "ComponentInterfaceSymbol.h"
 
-#include "Observer.h"
 #include "Prefs.h"
 
 //! A choice of theme such as "Light", "Dark", ...
@@ -97,25 +93,7 @@ private:
 
 };
 
-struct ThemeSet
-{
-   // wxImage, wxBitmap copy cheaply using reference counting
-   std::vector<wxImage> mImages;
-   std::vector<wxBitmap> mBitmaps;
-   std::vector<wxColour> mColours;
-
-   bool bInitialised = false;
-   bool bRecolourOnLoad = false;  // Request to recolour.
-};
-
-struct ThemeChangeMessage {
-   std::optional<PreferredSystemAppearance> appearance; /*!<
-      An enum value when preferred system appearance changes, or nullopt
-      for change of the image set */
-};
-
 class THEME_API ThemeBase /* not final */
-   : public Observer::Publisher<ThemeChangeMessage>
 {
 public:
    ThemeBase(void);
@@ -125,11 +103,7 @@ public:
    virtual ~ThemeBase(void);
 
 public:
-   virtual void EnsureInitialised() = 0;
-
-   // Get and set the root directory for saving and loading of files
-   FilePath GetFilePath();
-   void SetFilePath(const FilePath &path);
+   virtual void EnsureInitialised()=0;
 
    // Typically statically constructed:
    struct THEME_API RegisteredTheme {
@@ -145,32 +119,21 @@ public:
       const std::vector<unsigned char>& data;
    };
 
-   void SwitchTheme( teThemeType Theme );
    void LoadTheme( teThemeType Theme );
-
-   // For checking uniqueness of names during registration
-   using NameSet = std::unordered_set<wxString>;
-
-   void RegisterImage( NameSet &allNames,
-      int &flags, int &iIndex,char const** pXpm, const wxString & Name);
-   void RegisterImage( NameSet &allNames,
-      int &flags, int &iIndex, const wxImage &Image, const wxString & Name );
-   void RegisterColour( NameSet &allNames,
-      int &iIndex, const wxColour &Clr, const wxString & Name );
+   void RegisterImage( int &flags, int &iIndex,char const** pXpm, const wxString & Name);
+   void RegisterImage( int &flags, int &iIndex, const wxImage &Image, const wxString & Name );
+   void RegisterColour( int &iIndex, const wxColour &Clr, const wxString & Name );
 
    teThemeType GetFallbackThemeType();
-   void CreateImageCache();
-   bool CreateOneImageCache(teThemeType id, bool bBinarySave);
+   void CreateImageCache(bool bBinarySave = true);
    bool ReadImageCache( teThemeType type = {}, bool bOkIfNotFound=false);
-   void LoadThemeComponents( bool bOkIfNotFound =false);
-   void LoadOneThemeComponents( teThemeType id, bool bOkIfNotFound = false);
-   void SaveThemeComponents();
-   bool SaveOneThemeComponents( teThemeType id );
+   void LoadComponents( bool bOkIfNotFound =false);
+   void SaveComponents();
    void SaveThemeAsCode();
    void WriteImageDefs( );
    void WriteImageMap( );
-   void WriteOneImageMap( teThemeType id );
    static bool LoadPreferredTheme();
+   bool IsUsingSystemTextColour(){ return bIsUsingSystemTextColour; }
    void RecolourBitmap( int iIndex, wxColour From, wxColour To );
    void RecolourTheme();
 
@@ -179,6 +142,8 @@ public:
    wxBitmap & Bitmap( int iIndex );
    wxImage  & Image( int iIndex );
    wxSize ImageSize( int iIndex );
+   bool bRecolourOnLoad;  // Request to recolour.
+   bool bIsUsingSystemTextColour;
 
    void ReplaceImage( int iIndex, wxImage * pImage );
    void RotateImageInto( int iTo, int iFrom, bool bClockwise );
@@ -191,25 +156,26 @@ public:
    // Utility function that takes a 32 bit bitmap and makes it into an image.
    wxImage MakeImageWithAlpha( wxBitmap & Bmp );
 
-   // Reclaim resources after finished with theme editing
-   void DeleteUnusedThemes();
-
+   using OnPreferredSystemAppearanceChanged = std::function<void (PreferredSystemAppearance)>;
+   OnPreferredSystemAppearanceChanged
+   SetOnPreferredSystemAppearanceChanged(OnPreferredSystemAppearanceChanged handler);
 protected:
-   FilePath mThemeDir;
-
+   // wxImage, wxBitmap copy cheaply using reference counting
+   std::vector<wxImage> mImages;
+   std::vector<wxBitmap> mBitmaps;
    wxArrayString mBitmapNames;
    std::vector<int> mBitmapFlags;
+
+   std::vector<wxColour> mColours;
    wxArrayString mColourNames;
 
    PreferredSystemAppearance mPreferredSystemAppearance { PreferredSystemAppearance::Light };
-
-   std::map<Identifier, ThemeSet> mSets;
-   ThemeSet *mpSet = nullptr;
+   OnPreferredSystemAppearanceChanged mOnPreferredSystemAppearanceChanged;
 };
+
 
 class THEME_API Theme final : public ThemeBase
 {
-   friend class AColor; // So it can publish
 public:
    Theme(void);
 public:
@@ -217,6 +183,7 @@ public:
 public:
    void EnsureInitialised() override;
    void RegisterImagesAndColours();
+   bool mbInitialised;
 };
 
 extern THEME_API Theme theTheme;

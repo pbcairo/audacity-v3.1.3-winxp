@@ -17,7 +17,6 @@
 class CheckListAx;
 enum EffectType : int;
 class PluginDescriptor;
-class PluginManager;
 class ShuttleGui;
 class wxListEvent;
 class wxListCtrl;
@@ -26,7 +25,7 @@ class PluginRegistrationDialog final : public wxDialogWrapper
 {
 public:
    // constructors and destructors
-   PluginRegistrationDialog(wxWindow *parent);
+   PluginRegistrationDialog(wxWindow *parent, EffectType type);
 
 private:
    struct ItemData
@@ -45,7 +44,6 @@ private:
 
    void Populate();
    void PopulateOrExchange(ShuttleGui & S);
-   void PopulateItemsList(PluginManager& pm);
    void RegenerateEffectsList(int iShowWhat);
    void SetState(int i, bool toggle, bool state = true);
 
@@ -60,11 +58,11 @@ private:
    void OnCancel(wxCommandEvent & evt);
    void OnSelectAll(wxCommandEvent & evt);
    void OnClearAll(wxCommandEvent & evt);
-   void OnRescan(wxCommandEvent & evt);
    void OnEnable(wxCommandEvent & evt);
    void OnDisable(wxCommandEvent & evt);
 
 private:
+   EffectType mType;
    int mFilter;
 
    wxArrayString mStates;

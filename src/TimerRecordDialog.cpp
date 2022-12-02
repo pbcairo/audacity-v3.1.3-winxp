@@ -23,7 +23,6 @@
 
 #include "FileNames.h"
 
-#include <thread>
 #include <wx/setup.h> // for wxUSE_* macros
 
 #include <wx/wxcrtvararg.h>
@@ -86,7 +85,7 @@ enum {
 const int kSlowTimerInterval = 1000; // ms
 
 // This timer interval is used in some busy-wait loops and is much shorter.
-constexpr auto kTimerInterval = std::chrono::milliseconds{50};
+const int kTimerInterval = 50; // ms
 
 static double wxDateTime_to_AudacityTime(wxDateTime& dateTime)
 {
@@ -403,7 +402,7 @@ void TimerRecordDialog::OnOK(wxCommandEvent& WXUNUSED(event))
 
    // MY: Estimate here if we have enough disk space to
    // complete this Timer Recording.
-   // If we don't think there is enough space then ask the user
+   // If we dont think there is enough space then ask the user
    // if they want to continue.
    // We don't stop the user from starting the recording 
    // as its possible that they plan to free up some
@@ -538,8 +537,7 @@ int TimerRecordDialog::RunWaitDialog()
          // Loop for progress display during recording.
          while (bIsRecording && (updateResult == ProgressResult::Success)) {
             updateResult = progress.UpdateProgress();
-            using namespace std::chrono;
-            std::this_thread::sleep_for(kTimerInterval);
+            wxMilliSleep(kTimerInterval);
             bIsRecording = (wxDateTime::UNow() <= m_DateTime_End); // Call UNow() again for extra accuracy...
          }
       }
@@ -1038,8 +1036,7 @@ ProgressResult TimerRecordDialog::WaitForStart()
    while (updateResult == ProgressResult::Success && !bIsRecording)
    {
       updateResult = progress.UpdateProgress();
-      using namespace std::chrono;
-      std::this_thread::sleep_for(kTimerInterval);
+      wxMilliSleep(kTimerInterval);
       bIsRecording = (m_DateTime_Start <= wxDateTime::UNow());
    }
    return updateResult;
@@ -1089,8 +1086,7 @@ ProgressResult TimerRecordDialog::PreActionDelay(int iActionIndex, TimerRecordCo
    while (iUpdateResult == ProgressResult::Success && !bIsTime)
    {
       iUpdateResult = dlgAction.UpdateProgress();
-      using namespace std::chrono;
-      std::this_thread::sleep_for(kTimerInterval);
+      wxMilliSleep(kTimerInterval);
       bIsTime = (dtActionTime <= wxDateTime::UNow());
    }
    return iUpdateResult;

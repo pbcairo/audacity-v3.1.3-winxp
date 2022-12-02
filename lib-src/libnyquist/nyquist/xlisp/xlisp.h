@@ -172,15 +172,6 @@ extern long ptrtoabs();
 #endif
 #endif
 
-/* FreeBSD */
-#ifdef FreeBSD
-#if BYTE_ORDER == LITTLE_ENDIAN
-#define XL_LITTLE_ENDIAN
-#else
-#define XL_BIG_ENDIAN
-#endif
-#endif
-
 /* Apple CC (xcode, macOS, macintosh) */
 #ifdef __APPLE__
 #define NNODES 2000

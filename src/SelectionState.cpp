@@ -10,7 +10,6 @@
 #include "SelectionState.h"
 
 #include "ViewInfo.h"
-#include "SyncLock.h"
 #include "Track.h"
 #include "Project.h"
 
@@ -37,7 +36,7 @@ void SelectionState::SelectTrackLength
    auto trackRange = syncLocked
    // If we have a sync-lock group and sync-lock linking is on,
    // check the sync-lock group tracks.
-   ? SyncLock::Group(&track)
+   ? TrackList::SyncLockGroup(&track)
 
    // Otherwise, check for a stereo pair
    : TrackList::Channels(&track);

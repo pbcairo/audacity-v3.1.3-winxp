@@ -3,18 +3,18 @@ $version 4
 $type generate
 $name (_ "Rhythm Track")
 $manpage "Rhythm_Track"
-$debugbutton false
 $preview linear
-$author (_ "Dominic Mazzoni, David R. Sky and Steve Daulton")
-$release 3.0.0-1
-$copyright (_ "GNU General Public License v2.0")
+$action (_ "Generating Rhythm...")
+$author (_ "Dominic Mazzoni")
+$release 3.0.0
+$copyright (_ "Released under terms of the GNU General Public License version 2")
 
-
+;; by Dominic Mazzoni, David R. Sky and Steve Daulton.
 ;; Drip sound generator by Paul Beach
 
 ;; TODO: add more drum sounds
 
-;; License: GPL v2+
+;; Released under terms of the GNU General Public License version 2:
 ;; http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
 ;;
 ;; For information about writing and modifying Nyquist plug-ins:

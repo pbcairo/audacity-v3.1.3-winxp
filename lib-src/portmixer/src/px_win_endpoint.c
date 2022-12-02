@@ -35,6 +35,7 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
+typedef struct IUnknown IUnknown;
 #define CINTERFACE 1
 #define COBJMACROS 1
 

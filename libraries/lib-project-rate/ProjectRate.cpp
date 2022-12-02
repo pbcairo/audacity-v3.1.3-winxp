@@ -17,6 +17,21 @@ Paul Licameli split from ProjectSettings.cpp
 #include "XMLWriter.h"
 #include "XMLAttributeValueView.h"
 
+wxDEFINE_EVENT(EVT_PROJECT_RATE_CHANGE, wxEvent);
+
+namespace {
+   struct MyEvent : wxEvent {
+      MyEvent() : wxEvent{ 0, EVT_PROJECT_RATE_CHANGE } {}
+      wxEvent *Clone() const override { return new MyEvent{*this}; }
+   };
+
+   void Notify( AudacityProject &project )
+   {
+      MyEvent e;
+      project.ProcessEvent( e );
+   }
+}
+
 static const AudacityProject::AttachedObjects::RegisteredFactory
 sKey{
   []( AudacityProject &project ){
@@ -36,6 +51,7 @@ const ProjectRate &ProjectRate::Get( const AudacityProject &project )
 }
 
 ProjectRate::ProjectRate(AudacityProject &project)
+   : mProject{ project }
 {
    int intRate = 0;
    bool wasDefined = QualitySettings::DefaultSampleRate.Read( &intRate );
@@ -59,7 +75,7 @@ void ProjectRate::SetRate(double rate)
 {
    if (rate != mRate) {
       mRate = rate;
-      Publish(rate);
+      Notify(mProject);
    }
 }
 

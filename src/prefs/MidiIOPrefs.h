@@ -29,8 +29,8 @@ class MidiIOPrefs final : public PrefsPanel
  public:
    MidiIOPrefs(wxWindow * parent, wxWindowID winid);
    virtual ~MidiIOPrefs();
-   ComponentInterfaceSymbol GetSymbol() const override;
-   TranslatableString GetDescription() const override;
+   ComponentInterfaceSymbol GetSymbol() override;
+   TranslatableString GetDescription() override;
 
    bool Commit() override;
    bool Validate() override;

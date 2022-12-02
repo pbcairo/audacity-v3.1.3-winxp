@@ -15,7 +15,7 @@ Paul Licameli split from TrackControls.cpp
 #include "AColor.h"
 #include "../../RefreshCode.h"
 #include "Project.h"
-#include "ProjectHistory.h"
+#include "../../ProjectHistory.h"
 #include "../../ProjectWindows.h"
 #include "../../TrackArtist.h"
 #include "../../TrackInfo.h"
@@ -26,7 +26,7 @@ Paul Licameli split from TrackControls.cpp
 #include "../../commands/AudacityCommand.h"
 #include "../../commands/CommandManager.h"
 #include "../../ShuttleGui.h"
-#include "Track.h"
+#include "../../Track.h"
 #include "../../widgets/PopupMenuTable.h"
 
 #include <wx/dc.h>
@@ -191,10 +191,10 @@ public:
    static const ComponentInterfaceSymbol Symbol;
 
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override
+   ComponentInterfaceSymbol GetSymbol() override
    { return Symbol; }
    //TranslatableString GetDescription() override {return XO("Sets the track name.");};
-   //bool VisitSettings( SettingsVisitor & S ) override;
+   //bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
    //bool Apply(const CommandContext & context) override;
 
@@ -372,7 +372,7 @@ void CommonTrackControls::Draw(
    
       // Vaughan, 2010-08-24: No longer doing this.
       // Draw sync-lock tiles in ruler area.
-      //if (SyncLock::IsSyncLockSelected(t)) {
+      //if (t->IsSyncLockSelected()) {
       //   wxRect tileFill = rect;
       //   tileFill.x = mViewInfo->GetVRulerOffset();
       //   tileFill.width = mViewInfo->GetVRulerWidth();

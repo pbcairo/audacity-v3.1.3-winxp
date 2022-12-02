@@ -30,11 +30,9 @@ public:
    int mFormat;
 
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override {return Symbol;};
-   TranslatableString GetDescription() const override {return XO("Gives help on a command.");};
-   template<bool Const> bool VisitSettings( SettingsVisitorBase<Const> &S );
-   bool VisitSettings( SettingsVisitor & S ) override;
-   bool VisitSettings( ConstSettingsVisitor & S ) override;
+   ComponentInterfaceSymbol GetSymbol() override {return Symbol;};
+   TranslatableString GetDescription() override {return XO("Gives help on a command.");};
+   bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
    bool Apply(const CommandContext & context) override;
    bool ApplyInner(const CommandContext & context);
@@ -52,11 +50,9 @@ public:
    int mFormat;
 
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override {return Symbol;};
-   TranslatableString GetDescription() const override {return XO("For comments in a macro.");};
-   template<bool Const> bool VisitSettings( SettingsVisitorBase<Const> &S );
-   bool VisitSettings( SettingsVisitor & S ) override;
-   bool VisitSettings( ConstSettingsVisitor & S ) override;
+   ComponentInterfaceSymbol GetSymbol() override {return Symbol;};
+   TranslatableString GetDescription() override {return XO("For comments in a macro.");};
+   bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
    bool Apply(const CommandContext & context) override {
       return true;

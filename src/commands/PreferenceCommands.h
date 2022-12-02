@@ -32,11 +32,9 @@ public:
    static const ComponentInterfaceSymbol Symbol;
 
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override {return Symbol;};
-   TranslatableString GetDescription() const override {return XO("Gets the value of a single preference.");};
-   template<bool Const> bool VisitSettings( SettingsVisitorBase<Const> &S );
-   bool VisitSettings( SettingsVisitor & S ) override;
-   bool VisitSettings( ConstSettingsVisitor & S ) override;
+   ComponentInterfaceSymbol GetSymbol() override {return Symbol;};
+   TranslatableString GetDescription() override {return XO("Gets the value of a single preference.");};
+   bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
    bool Apply(const CommandContext & context) override;
 
@@ -54,11 +52,9 @@ public:
    static const ComponentInterfaceSymbol Symbol;
 
    // ComponentInterface overrides
-   ComponentInterfaceSymbol GetSymbol() const override {return Symbol;};
-   TranslatableString GetDescription() const override {return XO("Sets the value of a single preference.");};
-   template<bool Const> bool VisitSettings( SettingsVisitorBase<Const> &S );
-   bool VisitSettings( SettingsVisitor & S ) override;
-   bool VisitSettings( ConstSettingsVisitor & S ) override;
+   ComponentInterfaceSymbol GetSymbol() override {return Symbol;};
+   TranslatableString GetDescription() override {return XO("Sets the value of a single preference.");};
+   bool DefineParams( ShuttleParams & S ) override;
    void PopulateOrExchange(ShuttleGui & S) override;
    bool Apply(const CommandContext & context) override;
 

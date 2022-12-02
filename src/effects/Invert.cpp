@@ -36,42 +36,43 @@ EffectInvert::~EffectInvert()
 
 // ComponentInterface implementation
 
-ComponentInterfaceSymbol EffectInvert::GetSymbol() const
+ComponentInterfaceSymbol EffectInvert::GetSymbol()
 {
    return Symbol;
 }
 
-TranslatableString EffectInvert::GetDescription() const
+TranslatableString EffectInvert::GetDescription()
 {
    return XO("Flips the audio samples upside-down, reversing their polarity");
 }
 
 // EffectDefinitionInterface implementation
 
-EffectType EffectInvert::GetType() const
+EffectType EffectInvert::GetType()
 {
    return EffectTypeProcess;
 }
 
-bool EffectInvert::IsInteractive() const
+bool EffectInvert::IsInteractive()
 {
    return false;
 }
 
-unsigned EffectInvert::GetAudioInCount() const
+// EffectClientInterface implementation
+
+unsigned EffectInvert::GetAudioInCount()
 {
    return 1;
 }
 
-unsigned EffectInvert::GetAudioOutCount() const
+unsigned EffectInvert::GetAudioOutCount()
 {
    return 1;
 }
 
-size_t EffectInvert::ProcessBlock(EffectSettings &,
-   const float *const *inBlock, float *const *outBlock, size_t blockLen)
+size_t EffectInvert::ProcessBlock(float **inBlock, float **outBlock, size_t blockLen)
 {
-   const float *ibuf = inBlock[0];
+   float *ibuf = inBlock[0];
    float *obuf = outBlock[0];
 
    for (decltype(blockLen) i = 0; i < blockLen; i++)
